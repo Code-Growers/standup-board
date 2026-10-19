@@ -214,3 +214,7 @@ To try local changes, start a session with
 To type-check, copy this build's declarations into
 `.claude-plugin/types/` (the engine writes them there when it loads the mod
 from a `--plugin-dir` folder), then run `tsc -p .`.
+
+## License
+
+[MIT](LICENSE) © Code Growers

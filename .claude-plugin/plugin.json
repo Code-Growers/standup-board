@@ -2,7 +2,16 @@
   "name": "standup-board",
   "version": "0.1.0",
   "description": "A Jira-style board of every Claude Code session on this machine: Running, Waiting for you, In review, Done.",
-  "author": { "name": "ProsteAdam" },
-  "keywords": ["sessions", "board", "kanban", "standup", "pane"],
+  "author": {
+    "name": "ProsteAdam"
+  },
+  "license": "MIT",
+  "keywords": [
+    "sessions",
+    "board",
+    "kanban",
+    "standup",
+    "pane"
+  ],
   "types": "./types/index.d.ts"
 }
