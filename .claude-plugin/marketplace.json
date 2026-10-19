@@ -1,0 +1,14 @@
+{
+  "name": "standup-board",
+  "owner": {
+    "name": "ProsteAdam"
+  },
+  "description": "standup-board: a Jira-style board of your local Claude Code sessions.",
+  "plugins": [
+    {
+      "name": "standup-board",
+      "source": "./",
+      "description": "A Jira-style board of every Claude Code session on this machine."
+    }
+  ]
+}
