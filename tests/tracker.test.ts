@@ -28,6 +28,23 @@ describe('tracker', () => {
     })
   })
 
+  test('loaded into a running session, it takes the title and status from the transcript', async ($, on) => {
+    const w = world(on, {
+      sessionId: 'sess-mid',
+      history: [
+        { role: 'user', text: '<command-name>/reload-plugins</command-name>' },
+        { role: 'user', text: 'Build the standup board' },
+        { role: 'assistant', text: 'Done.' },
+      ],
+    })
+    await $.session.start(START)
+    expect(w.record('sess-mid')).toMatchObject({
+      title: 'Build the standup board',
+      status: 'waiting',
+      reason: 'reply',
+    })
+  })
+
   test('groups a worktree session under its repository root', async ($, on) => {
     const w = world(on, {
       sessionId: 'sess-wt',

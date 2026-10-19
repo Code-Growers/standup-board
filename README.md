@@ -11,8 +11,7 @@ A wide pane in the desktop app sets the four columns side by side:
 
 ![The standup board in a wide desktop pane](docs/screenshot.svg)
 
-A narrow pane (or the terminal) stacks them, and the environment tabs become a
-dropdown:
+A narrow pane (or the terminal) stacks them:
 
 <details>
 <summary>Narrow pane, 40 columns</summary>
@@ -20,7 +19,8 @@ dropdown:
 ```text
 5 active · 2 waiting for you
 
-Environment: [ All (2 waiting)       ▾ ]
+All 2   api 2   web
+───
 
 Show 1 environment with no active sessions
 
@@ -31,6 +31,7 @@ Running (2)
 │ just now                             │
 │ → Move to review                     │
 ╰──────────────────────────────────────╯
+
 ╭──────────────────────────────────────╮
 │ Fix OAuth token refresh              │
 │ api · running                        │
@@ -45,6 +46,7 @@ Waiting for you (2)
 │ 4m ago                               │
 │ → Move to review                     │
 ╰──────────────────────────────────────╯
+
 ╭──────────────────────────────────────╮
 │ Write migration for the invoices ta… │
 │ api · needs your reply               │
@@ -67,12 +69,14 @@ Done (3)
 │ 20m ago                              │
 │ → Move to review                     │
 ╰──────────────────────────────────────╯
+
 ╭──────────────────────────────────────╮
 │ Fix the flaky checkout e2e test      │
 │ web · ended                          │
 │ 3h ago                               │
 │ → Move to review                     │
 ╰──────────────────────────────────────╯
+
 ╭──────────────────────────────────────╮
 │ Rotate the staging certificates      │
 │ infra · ended                        │
@@ -108,41 +112,39 @@ group is labelled with its folder name, plus the parent folder when two names
 clash.
 
 - The tabs at the top switch between **All** and one board per environment.
-  Each tab shows how many sessions are waiting for you (`api ●2`).
+  The current one is bold and underlined, and the amber number beside a tab is
+  how many sessions there are waiting for you.
 - Environments with no active session are hidden. The link under the tabs
   shows them.
 - The board remembers the environment you viewed last.
-- In a narrow pane the tabs become a dropdown and the columns stack.
+- In a narrow pane the tabs wrap onto more lines and the columns stack.
 
-**Opening a session.** A mod can't open or focus another session. Pressing a
-card does two things:
-
-- copies `cd <folder> && claude --resume <id>` to your clipboard
-- shows that command at the top of the board
-
-Paste it in a terminal, or find the session by its title in the desktop
-sidebar. On the desktop the copy goes through macOS `pbcopy`, because the
+**Opening a session.** A mod can't open or focus another session, so pressing
+a card copies `cd <folder> && claude --resume <id>` to your clipboard. Paste it
+in a terminal, or find the session by its title in the desktop sidebar. On the desktop the copy goes through macOS `pbcopy`, because the
 desktop app doesn't expose its clipboard to mods yet.
 
 ## Install
 
 Requires Claude Code 2.1.288 or later (the desktop app bundles its own copy).
 
-At the prompt of a terminal session:
-
-```
-/plugin install standup-board --marketplace Code-Growers/claude-standup
-```
-
 From a shell:
 
 ```bash
-claude plugin install standup-board --marketplace Code-Growers/claude-standup
+claude plugin marketplace add Code-Growers/standup-board
 ```
 
+```bash
+claude plugin install standup-board@standup-board
+```
+
+At the prompt of a terminal session, the same two steps are
+`/plugin marketplace add Code-Growers/standup-board` and
+`/plugin install standup-board@standup-board`.
+
 In the desktop app, where `/plugin` doesn't run: click **+** next to the
-prompt box, then **Plugins**, **Add marketplace** with `Code-Growers/claude-standup`,
-then **Add plugin**.
+prompt box, then **Plugins**, **Add marketplace** with
+`Code-Growers/standup-board`, then **Add plugin**.
 
 Install it at the **user** scope so that it loads in every session. A session
 shows on the board once the mod is loaded in it, so sessions that were already
@@ -207,7 +209,7 @@ The tests run against fixture sessions (`tests/fixtures.ts`). They cover:
   narrow 40-column width
 
 To try local changes, start a session with
-`claude --plugin-dir /path/to/claude-standup`. Edits reload when you save.
+`claude --plugin-dir /path/to/standup-board`. Edits reload when you save.
 
 To type-check, copy this build's declarations into
 `.claude-plugin/types/` (the engine writes them there when it loads the mod

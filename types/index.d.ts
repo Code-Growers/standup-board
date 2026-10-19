@@ -53,7 +53,6 @@ declare module 'claude-code' {
       overrides: Record<string, Override>
       now: number
       prefs: Prefs
-      selected: string
     }
   }
 }

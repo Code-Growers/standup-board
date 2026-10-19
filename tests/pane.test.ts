@@ -59,17 +59,13 @@ describe('board pane', () => {
       await ui.unmount()
     })
 
-    test(`${surface}: a narrow pane stacks the columns and switches with a dropdown`, async ($, on) => {
+    test(`${surface}: a narrow pane stacks the columns, with room between cards`, async ($, on) => {
       await openBoard($, on)
       const ui = await mount($, surface, NARROW)
-      expect((await ui.find({ type: 'Box', key: 'col:running' }))?.props.width).toBe(NARROW)
-      const select = await ui.find({ type: 'Select', key: 'env' })
-      expect((select?.props.options as { label: string }[]).map(option => option.label)).toEqual([
-        'All (2 waiting)',
-        'api (2 waiting)',
-        'web',
-      ])
-      await ui.select({ key: 'env', value: '/Users/tester/code/web' })
+      const running = await ui.find({ type: 'Box', key: 'col:running' })
+      expect(running?.props.width).toBe(NARROW)
+      expect(running?.props.rowGap).toBe(1)
+      await ui.press({ key: 'env:2' })
       expect(await headers(ui)).toEqual([
         'Running (1)',
         'Waiting for you (0)',
@@ -79,16 +75,25 @@ describe('board pane', () => {
       await ui.unmount()
     })
 
-    test(`${surface}: environment tabs show waiting counts and filter the board`, async ($, on) => {
+    test(`${surface}: environment tabs are text, with waiting counts`, async ($, on) => {
       const w = await openBoard($, on)
       const ui = await mount($, surface, WIDE)
-      expect((await ui.find({ key: 'env:0' }))?.text).toBe('All ●2')
-      expect((await ui.find({ key: 'env:1' }))?.text).toBe('api ●2')
-      expect((await ui.find({ key: 'env:2' }))?.text).toBe('web')
+      const current = await ui.find({ type: 'Text', text: 'All' })
+      expect(current?.props).toMatchObject({ bold: true, underline: true, color: 'claude' })
+      expect(await ui.find({ key: 'env:0' })).toBe(undefined)
+      expect((await ui.find({ key: 'env:1' }))?.props).toMatchObject({ label: 'api', plain: true })
+      expect((await ui.find({ key: 'env:2' }))?.props.label).toBe('web')
       expect(await ui.find({ key: 'env:3' })).toBe(undefined)
+      const counts = await ui.findAll({ type: 'Text', text: /^\d+$/ })
+      expect(counts.map(found => [found.text, found.props.color])).toEqual([
+        ['2', 'warning'],
+        ['2', 'warning'],
+      ])
 
       await ui.press({ key: 'env:1' })
-      expect((await ui.find({ key: 'env:1' }))?.props.variant).toBe('primary')
+      expect(await ui.find({ key: 'env:1' })).toBe(undefined)
+      expect((await ui.find({ type: 'Text', text: 'api' }))?.props.bold).toBe(true)
+      expect((await ui.find({ key: 'env:0' }))?.props.label).toBe('All')
       expect(await headers(ui)).toEqual([
         'Running (1)',
         'Waiting for you (2)',
@@ -104,7 +109,7 @@ describe('board pane', () => {
       const ui = await mount($, surface, WIDE)
       expect((await ui.find({ key: 'toggle-empty' }))?.text).toContain('Show 1 environment')
       await ui.press({ key: 'toggle-empty' })
-      expect((await ui.find({ key: 'env:3' }))?.text).toBe('infra')
+      expect((await ui.find({ key: 'env:3' }))?.props.label).toBe('infra')
       expect((await ui.find({ key: 'toggle-empty' }))?.text).toContain('Hide')
       await ui.unmount()
     })
@@ -127,18 +132,14 @@ describe('board pane', () => {
       await ui.unmount()
     })
 
-    test(`${surface}: a card press shows and copies its resume command`, async ($, on) => {
+    test(`${surface}: a card press copies its resume command`, async ($, on) => {
       const w = await openBoard($, on, { isClipboard: surface === 'terminal' })
       const ui = await mount($, surface, WIDE)
       await ui.press({ key: 'card:a2' })
-      const command = 'cd /Users/tester/code/api && claude --resume a2'
-      expect((await ui.find({ type: 'Code' }))?.text).toBe(command)
-      expect(w.copies).toEqual([command])
+      expect(w.copies).toEqual(['cd /Users/tester/code/api && claude --resume a2'])
       // A remote surface has no clipboard path yet: pbcopy stands in.
       expect(w.runs).toEqual(surface === 'desktop' ? [['pbcopy']] : [])
       expect(w.toasts.at(-1)).toContain('copied')
-
-      await ui.press({ key: 'card:a2' })
       expect(await ui.find({ type: 'Code' })).toBe(undefined)
       await ui.unmount()
     })
@@ -170,7 +171,7 @@ describe('board pane', () => {
     w.store.set('prefs', { env: '/Users/tester/code/web', showEmpty: false })
     await $.session.start({ cwd: '/Users/tester/code/api', surface: 'desktop', isInteractive: true })
     const ui = await mount($, 'desktop', WIDE)
-    expect((await ui.find({ key: 'env:2' }))?.props.variant).toBe('primary')
+    expect((await ui.find({ type: 'Text', text: 'web' }))?.props.bold).toBe(true)
     expect((await headers(ui))[0]).toBe('Running (1)')
     await ui.unmount()
   })

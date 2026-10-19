@@ -67,16 +67,24 @@ async function load($: EngineInterface): Promise<SessionRecord> {
   const repo = await $.session.repo().catch(() => null)
   const cwd = await $.session.cwd()
   const hostSessionId = await $.env.get('CLAUDE_CODE_HOST_SESSION_ID')
+  // Loaded into a session that already ran (an install, /reload-plugins): its
+  // transcript gives the title and says it is waiting on a reply.
+  const found = saved?.title ? [] : await $.session.messages().catch(() => [])
+  const history = Array.isArray(found) ? found : []
+  const firstPrompt = history.find(
+    message => message.role === 'user' && message.text.trim() && !message.text.trimStart().startsWith('<'),
+  )?.text
+  const isLive = saved !== undefined && saved.status !== 'ended'
 
   record = {
     version: 1,
     id,
-    title: saved?.title ?? '',
+    title: saved?.title || clip(firstPrompt ?? '', 80),
     groupKey: repo?.root ?? (await $.session.root()),
     cwd,
     ...(hostSessionId ? { hostSessionId } : {}),
-    status: saved && saved.status !== 'ended' ? saved.status : 'waiting',
-    reason: saved && saved.status !== 'ended' ? saved.reason : 'new',
+    status: isLive ? saved.status : 'waiting',
+    reason: isLive ? saved.reason : history.length > 0 ? 'reply' : 'new',
     startedAt: saved?.startedAt ?? now,
     lastActivityAt: now,
     heartbeatAt: now,
@@ -241,8 +249,6 @@ const POLL_MS = 2_000
 const CLOCK_STEP_MS = 30_000
 /** Below this many columns the board stacks its columns instead of setting them side by side. */
 const WIDE_COLUMNS = 88
-/** Below this many columns the environment tabs become a dropdown. */
-const TABS_COLUMNS = 60
 
 const sessions = atom({ plugin: 'standup-board', key: 'sessions' } as const, [])
 const overrides = atom({ plugin: 'standup-board', key: 'overrides' } as const, {})
@@ -251,7 +257,6 @@ const prefs = atom({ plugin: 'standup-board', key: 'prefs' } as const, {
   env: ALL,
   showEmpty: false,
 })
-const selected = atom({ plugin: 'standup-board', key: 'selected' } as const, '')
 
 const COLOR: Record<ColumnId, string> = {
   running: 'success',
@@ -371,15 +376,8 @@ async function copyResume($: EngineInterface, record: SessionRecord, surface: Re
   $.ui.toast(
     isCopied
       ? 'Resume command copied: paste it in a terminal'
-      : 'Copy the resume command shown at the top of the board',
+      : `Could not copy. Resume it with: ${resumeCommand(record)}`,
   )
-}
-
-/** A card press opens its details and copies the resume command; a second press closes them. */
-async function openCard($: EngineInterface, record: SessionRecord, surface: RenderSurface) {
-  const isOpen = (await read($, selected)) === record.id
-  await update($, selected, () => (isOpen ? '' : record.id))
-  if (!isOpen) await copyResume($, record, surface)
 }
 
 const titleOf = (record: SessionRecord): string =>
@@ -420,10 +418,9 @@ const board = (on: On): void => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const table = $.ui.resolve(e)
-    const { Box, Text, Button, Code } = table
+    const { Box, Text, Button } = table
     const view = await read($, prefs)
     const time = (await read($, now)) || (await $.clock.now())
-    const pick = await read($, selected)
     const records = await read($, sessions)
     const result: Board = buildBoard({
       sessions: records,
@@ -441,14 +438,13 @@ const board = (on: On): void => {
     const card = (item: Card) => {
       const { record } = item
       const inner = Math.max(8, columnWidth - 4)
-      const isPicked = pick === record.id
 
       return (
         <Box
           key={`box:${record.id}`}
           flexDirection="column"
           borderStyle="round"
-          borderColor={isPicked ? 'claude' : COLOR[item.column]}
+          borderColor={COLOR[item.column]}
           paddingX={1}
           width={columnWidth}
         >
@@ -456,7 +452,7 @@ const board = (on: On): void => {
             key={`card:${record.id}`}
             plain
             label={clip(titleOf(record), inner)}
-            onPress={press => openCard($, record, press.surface)}
+            onPress={press => copyResume($, record, press.surface)}
           />
           <Text dimColor>
             {clip(`${item.envLabel} · ${statusText(item, time)}`, inner)}
@@ -473,39 +469,24 @@ const board = (on: On): void => {
       )
     }
 
-    const switcher = () => {
-      const all = { key: ALL, label: 'All', waiting: result.total.waiting }
-      const tabs = [all, ...result.environments]
-      if (columns < TABS_COLUMNS && 'Select' in table) {
-        const { Select } = table
-
-        return (
-          <Select
-            key="env"
-            label="Environment"
-            value={result.env}
-            options={tabs.map(tab => ({
-              value: tab.key,
-              label: tab.waiting > 0 ? `${tab.label} (${tab.waiting} waiting)` : tab.label,
-            }))}
-            onSelect={value => setEnv(value)}
-          />
-        )
-      }
-
-      return (
-        <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
-          {tabs.map((tab, index) => (
-            <Button
-              key={`env:${index}`}
-              variant={tab.key === result.env ? 'primary' : 'secondary'}
-              label={tab.waiting > 0 ? `${tab.label} ●${tab.waiting}` : tab.label}
-              onPress={() => setEnv(tab.key)}
-            />
-          ))}
-        </Box>
-      )
-    }
+    const tabs = () => (
+      <Box flexDirection="row" flexWrap="wrap" columnGap={3}>
+        {[{ key: ALL, label: 'All', waiting: result.total.waiting }, ...result.environments].map(
+          (tab, index) => (
+            <Box key={`tab:${index}`} flexDirection="row" columnGap={1}>
+              {tab.key === result.env ? (
+                <Text bold underline color="claude">
+                  {tab.label}
+                </Text>
+              ) : (
+                <Button key={`env:${index}`} plain dimColor label={tab.label} onPress={() => setEnv(tab.key)} />
+              )}
+              {tab.waiting > 0 && <Text color={COLOR.waiting}>{tab.waiting}</Text>}
+            </Box>
+          ),
+        )}
+      </Box>
+    )
 
     const toggle = () =>
       (result.hiddenEnvironments > 0 || view.showEmpty) && (
@@ -522,26 +503,8 @@ const board = (on: On): void => {
         />
       )
 
-    const picked = records.find(record => record.id === pick)
-    const detail = () =>
-      picked && (
-        <Box key="detail" flexDirection="column" borderStyle="single" paddingX={1}>
-          <Text bold>{clip(titleOf(picked), columns - 4)}</Text>
-          <Text dimColor>Resume it from a terminal (the desktop app has no way to open it from here):</Text>
-          <Code source={resumeCommand(picked)} language="bash" wrap="wrap" />
-          <Box flexDirection="row" columnGap={2}>
-            <Button key="copy" plain onPress={press => copyResume($, picked, press.surface)}>
-              Copy again
-            </Button>
-            <Button key="close-detail" plain onPress={() => update($, selected, () => '')}>
-              Close
-            </Button>
-          </Box>
-        </Box>
-      )
-
     const column = (entry: Board['columns'][number]) => (
-      <Box key={`col:${entry.id}`} flexDirection="column" width={columnWidth} rowGap={isWide ? 1 : 0}>
+      <Box key={`col:${entry.id}`} flexDirection="column" width={columnWidth} rowGap={1}>
         <Text bold color={COLOR[entry.id]}>
           {entry.title} ({entry.cards.length})
         </Text>
@@ -572,9 +535,8 @@ const board = (on: On): void => {
           <Text dimColor> · </Text>
           <Text color={COLOR.waiting}>{result.total.waiting} waiting for you</Text>
         </Text>
-        {switcher()}
+        {tabs()}
         {toggle()}
-        {detail()}
         <Box flexDirection={isWide ? 'row' : 'column'} columnGap={gap} rowGap={1}>
           {result.columns.map(column)}
         </Box>

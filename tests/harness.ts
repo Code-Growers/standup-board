@@ -31,6 +31,8 @@ export type WorldOptions = {
   isClipboard?: boolean
   hostSessionId?: string
   toolCheck?: 'allow' | 'ask' | 'deny'
+  /** The transcript a session already holds when the mod loads into it. */
+  history?: { role: 'user' | 'assistant'; text: string }[]
 }
 
 const dirOf = (path: string) => path.slice(0, path.lastIndexOf('/'))
@@ -87,6 +89,9 @@ export const world = (on: On, options: WorldOptions = {}): World => {
   on('session.id', () => ({ value: options.sessionId ?? 'sess-test' }))
   on('session.cwd', () => ({ value: cwd }))
   on('session.root', () => ({ value: cwd }))
+  on('session.messages', () => ({
+    value: (options.history ?? []).map(message => ({ ...message, toolUses: [] })),
+  }) as never)
   on('session.repo', () => ({
     value:
       options.repo === undefined
