@@ -107,6 +107,8 @@ describe('tracker', () => {
     await $.session.start(START)
     await $.turn.start({ text: 'deploy', turnId: 't1' })
     await $.classic.PermissionRequest({ tool_name: 'Bash', tool_input: { command: 'make deploy' } })
+    // The hook records the status in the background: let that write land.
+    await w.clock.advance(0)
     expect(w.record('sess-6')).toMatchObject({ status: 'waiting', reason: 'permission' })
 
     await $.classic.PermissionDenied({ tool_name: 'Bash', tool_input: {}, tool_use_id: 'u1', reason: 'no' } as never)

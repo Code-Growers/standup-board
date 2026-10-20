@@ -60,8 +60,9 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('classic.PermissionRequest', async ($, e, next) => {
-    await mark($, 'waiting', 'permission')
+  // Records the status without waiting on it, so the prompt is never held up.
+  on('classic.PermissionRequest', ($, e, next) => {
+    void mark($, 'waiting', 'permission').catch(() => undefined)
 
     return next(e)
   })
