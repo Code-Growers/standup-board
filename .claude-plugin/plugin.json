@@ -12,6 +12,5 @@
     "kanban",
     "standup",
     "pane"
-  ],
-  "types": "./types/index.d.ts"
+  ]
 }

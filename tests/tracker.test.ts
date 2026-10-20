@@ -113,16 +113,6 @@ describe('tracker', () => {
     expect(w.record('sess-6')?.status).toBe('running')
   })
 
-  test('an ask verdict on a real call counts as a permission prompt', async ($, on) => {
-    const w = world(on, { sessionId: 'sess-7', toolCheck: 'ask' })
-    await $.session.start(START)
-    await $.turn.start({ text: 'deploy', turnId: 't1' })
-    await $.tool.check({ tool: 'Bash', input: { command: 'ls' } })
-    expect(w.record('sess-7')?.status).toBe('running')
-    await $.tool.check({ tool: 'Bash', input: { command: 'make deploy' }, tool_use_id: 'u1' })
-    expect(w.record('sess-7')).toMatchObject({ status: 'waiting', reason: 'permission' })
-  })
-
   test('the session ending marks the record ended', async ($, on) => {
     const w = world(on, { sessionId: 'sess-8' })
     await $.session.start(START)

@@ -30,7 +30,6 @@ export type WorldOptions = {
   /** Whether the surface's own clipboard takes a copy (remote surfaces: no). */
   isClipboard?: boolean
   hostSessionId?: string
-  toolCheck?: 'allow' | 'ask' | 'deny'
   /** The transcript a session already holds when the mod loads into it. */
   history?: { role: 'user' | 'assistant'; text: string }[]
 }
@@ -103,7 +102,6 @@ export const world = (on: On, options: WorldOptions = {}): World => {
   on('session.end', ($, e) => ({ sessionId: e.sessionId }))
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
   on('turn.complete', ($, e) => ({ text: e.answer }))
-  on('tool.check', () => ({ decision: options.toolCheck ?? 'allow' }))
   on('tool.call', () => ({ result: { text: 'ok' } }) as never)
   on('classic.SessionStart', () => ({}))
   on('classic.UserPromptSubmit', () => ({}))

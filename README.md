@@ -179,17 +179,57 @@ Type `/standup` to open the board. It refreshes every 2 seconds while open.
 - Your view (last environment, show-empty toggle) is kept in the mod's own
   store.
 
-**What it never does.** It makes no network requests and no model calls. It
-writes nothing outside `~/.claude/standup/`. The only command it runs is
-`pbcopy`, when you press a card. `claude plugin validate` lists every call the
-mod makes.
+## What it reads, writes, runs and sends
+
+**Writes.** Only two kinds of small JSON files, both under `~/.claude/standup/`:
+
+- `sessions/<session-id>.json`: each session's own record (title, folder, git
+  repository root, status, timestamps). Written by that session.
+- `overrides/<session-id>.json`: the **In review** flag, written by the board
+  when you press a review button.
+
+The file name comes from the session id, so the path can't be fixed text. These
+are not build, settings, start-up or instruction files: no other tool reads,
+runs or obeys them.
+
+**Reads.**
+
+- The two folders above.
+- The session's id, folder and git repository root.
+- The first prompt of the conversation, used as the card title when the
+  session has no title of its own.
+- The environment variables `HOME` and `USERPROFILE` (to find `~/.claude`) and
+  `CLAUDE_CODE_HOST_SESSION_ID` (the desktop app's id for the session).
+
+**Runs.** One program: `pbcopy` (macOS), only when you press a card. It gets
+the session's resume command (`cd <folder> && claude --resume <id>`) on its
+standard input and puts it on your clipboard. The desktop app doesn't give
+plugins a clipboard yet, so this is how the copy works there. Where the
+surface has its own clipboard (the terminal), `pbcopy` isn't run.
+
+**Sends.** Nothing leaves your machine. The plugin makes no network requests
+and no model calls. The resume command goes only to your clipboard.
+
+**Hooks.** Every hook only observes and passes the event on unchanged. None of
+them blocks, rewrites or answers anything, and none of them decides a
+permission.
+
+| Hook | What it does |
+| --- | --- |
+| `session.start` | Writes the session's first record and registers `/standup`. |
+| `classic.SessionStart`, `classic.UserPromptSubmit` | Read the session title and the first prompt for the card title. |
+| `turn.start`, `turn.complete` | Mark the session running, then waiting for your reply. |
+| `classic.PermissionRequest` | Marks the session as waiting on a permission prompt. It doesn't answer the prompt: you still decide. |
+| `classic.Elicitation`, `classic.ElicitationResult`, `classic.PermissionDenied` | Mark the session waiting on an input form, and back to running once answered. |
+| `tool.call` | Marks the session waiting while Claude asks you a question, and stamps the time of the last activity. |
+| `session.end` | Marks the session ended. |
+| `command.run` (`/standup` only) | Opens the board. |
+| `ui.close`, `ui.render` (the board's own pane only) | Stop the board's refresh timer, and draw the board. |
 
 **Organization-managed installs.** Where an organization manages Claude Code,
-settings-hook events don't reach plugins you install yourself. The board still
-works there, with two fallbacks:
-
-- the title comes from the session's first prompt instead of its own title
-- a permission prompt is detected from the engine's "ask" verdict instead
+`classic.*` events don't reach plugins you install yourself. The board still
+works there, but cards take their title from the first prompt, and a session
+on a permission prompt shows as running.
 
 ## Develop
 

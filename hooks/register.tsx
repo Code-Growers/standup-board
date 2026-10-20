@@ -2,7 +2,7 @@
 // follows `$` only into functions declared in the hooks module itself.
 
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, On, Register, RenderSurface } from 'claude-code'
+import type { EngineInterface, Register, RenderSurface } from 'claude-code'
 
 import type { Override, Prefs, SessionRecord, SessionStatus, StatusReason } from '../types'
 import {
@@ -25,8 +25,229 @@ export const register: Register = on => {
     return next(e)
   })
 
-  track(on)
-  board(on)
+  // Also after /clear, resume and fork, where no `session.start` fires.
+  on('classic.SessionStart', async ($, e, next) => {
+    await load($)
+    await setTitle($, e.session_title, true)
+    await save($, true)
+
+    return next(e)
+  })
+
+  on('classic.UserPromptSubmit', async ($, e, next) => {
+    await setTitle($, e.session_title, true)
+    if (!MACHINE_PROMPTS.has(e.source ?? 'user')) await setTitle($, e.prompt, false)
+
+    return next(e)
+  })
+
+  on('turn.start', async ($, e, next) => {
+    if (e.agentId === undefined) {
+      // The first prompt titles a session that has no title of its own.
+      await setTitle($, e.text, false)
+      await mark($, 'running')
+    }
+
+    return next(e)
+  })
+
+  on('turn.complete', async ($, e, next) => {
+    if (e.agentId === undefined) {
+      const reason = e.reason === 'answer' ? 'reply' : e.reason === 'aborted' ? 'interrupted' : 'error'
+      await mark($, 'waiting', reason)
+    }
+
+    return next(e)
+  })
+
+  on('classic.PermissionRequest', async ($, e, next) => {
+    await mark($, 'waiting', 'permission')
+
+    return next(e)
+  })
+
+  on('classic.Elicitation', async ($, e, next) => {
+    await mark($, 'waiting', 'input')
+
+    return next(e)
+  })
+
+  on('tool.call', async ($, e, next) => {
+    const isQuestion = String(e.tool) === 'AskUserQuestion'
+    if (isQuestion) await mark($, 'waiting', 'question')
+    const result = await next(e)
+    if (isWaitingOnTool()) await mark($, 'running')
+    else await touch($)
+
+    return result
+  })
+
+  // A prompt answered without the tool finishing yet (a denial, an MCP form).
+  on('classic.PermissionDenied', async ($, e, next) => {
+    if (isWaitingOnTool()) await mark($, 'running')
+
+    return next(e)
+  })
+
+  on('classic.ElicitationResult', async ($, e, next) => {
+    if (isWaitingOnTool()) await mark($, 'running')
+
+    return next(e)
+  })
+
+  on('session.end', async ($, e, next) => {
+    const current = record?.id === e.sessionId ? record : await load($)
+    const now = await $.clock.now()
+    record = { ...current, status: 'ended', reason: e.reason, endedAt: now, lastActivityAt: now }
+    await save($, true)
+    record = undefined
+
+    return next(e)
+  })
+
+  on('command.run', { command: 'standup' }, async $ => {
+    const opened = await openBoard($)
+
+    return {
+      text: opened.isPlaced
+        ? 'Standup board opened.'
+        : `Standup board will show when there is room: ${opened.reason}`,
+    }
+  })
+
+  on('ui.close', { id: PANE }, ($, e, next) => {
+    stopPolling()
+
+    return next(e)
+  })
+
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    const table = $.ui.resolve(e)
+    const { Box, Text, Button } = table
+    const view = await read($, prefs)
+    const time = (await read($, now)) || (await $.clock.now())
+    const records = await read($, sessions)
+    const result: Board = buildBoard({
+      sessions: records,
+      overrides: await read($, overrides),
+      now: time,
+      env: view.env,
+      showEmpty: view.showEmpty,
+    })
+    const columns = Math.max(20, e.props.bodyColumns)
+    const isWide = columns >= WIDE_COLUMNS
+    const gap = 1
+    const columnWidth = isWide ? Math.floor((columns - gap * 3) / 4) : columns
+    const setEnv = (env: string) => savePrefs($, value => ({ ...value, env }))
+
+    const card = (item: Card) => {
+      const { record } = item
+      const inner = Math.max(8, columnWidth - 4)
+
+      return (
+        <Box
+          key={`box:${record.id}`}
+          flexDirection="column"
+          borderStyle="round"
+          borderColor={COLOR[item.column]}
+          paddingX={1}
+          width={columnWidth}
+        >
+          <Button
+            key={`card:${record.id}`}
+            plain
+            label={clip(titleOf(record), inner)}
+            onPress={press => copyResume($, record, press.surface)}
+          />
+          <Text dimColor>
+            {clip(`${item.envLabel} · ${statusText(item, time)}`, inner)}
+          </Text>
+          <Text dimColor>{clip(ago(record.lastActivityAt, time), inner)}</Text>
+          <Button
+            key={`review:${record.id}`}
+            plain
+            dimColor
+            label={item.isReview ? '↩ Out of review' : '→ Move to review'}
+            onPress={() => toggleReview($, record.id)}
+          />
+        </Box>
+      )
+    }
+
+    const tabs = () => (
+      <Box flexDirection="row" flexWrap="wrap" columnGap={3}>
+        {[{ key: ALL, label: 'All', waiting: result.total.waiting }, ...result.environments].map(
+          (tab, index) => (
+            <Box key={`tab:${index}`} flexDirection="row" columnGap={1}>
+              {tab.key === result.env ? (
+                <Text bold underline color="claude">
+                  {tab.label}
+                </Text>
+              ) : (
+                <Button key={`env:${index}`} plain dimColor label={tab.label} onPress={() => setEnv(tab.key)} />
+              )}
+              {tab.waiting > 0 && <Text color={COLOR.waiting}>{tab.waiting}</Text>}
+            </Box>
+          ),
+        )}
+      </Box>
+    )
+
+    const toggle = () =>
+      (result.hiddenEnvironments > 0 || view.showEmpty) && (
+        <Button
+          key="toggle-empty"
+          plain
+          dimColor
+          label={
+            view.showEmpty
+              ? 'Hide environments with no active sessions'
+              : `Show ${result.hiddenEnvironments} environment${result.hiddenEnvironments === 1 ? '' : 's'} with no active sessions`
+          }
+          onPress={() => savePrefs($, value => ({ ...value, showEmpty: !value.showEmpty }))}
+        />
+      )
+
+    const column = (entry: Board['columns'][number]) => (
+      <Box key={`col:${entry.id}`} flexDirection="column" width={columnWidth} rowGap={1}>
+        <Text bold color={COLOR[entry.id]}>
+          {entry.title} ({entry.cards.length})
+        </Text>
+        {entry.cards.length === 0 ? (
+          <Text dimColor>Nothing here</Text>
+        ) : (
+          entry.cards.map(card)
+        )}
+      </Box>
+    )
+
+    if (records.length === 0) {
+      return (
+        <Box flexDirection="column" rowGap={1}>
+          <Text bold>No sessions yet</Text>
+          <Text dimColor>
+            Every session with standup-board installed shows up here once it starts. The board
+            only sees sessions on this machine.
+          </Text>
+        </Box>
+      )
+    }
+
+    return (
+      <Box flexDirection="column" rowGap={1} width={columns}>
+        <Text key="summary">
+          <Text color={COLOR.running}>{result.total.active} active</Text>
+          <Text dimColor> · </Text>
+          <Text color={COLOR.waiting}>{result.total.waiting} waiting for you</Text>
+        </Text>
+        {tabs()}
+        {toggle()}
+        <Box flexDirection={isWide ? 'row' : 'column'} columnGap={gap} rowGap={1}>
+          {result.columns.map(column)}
+        </Box>
+      </Box>
+    )
+  })
 }
 
 async function stateDir($: EngineInterface): Promise<string> {
@@ -150,98 +371,6 @@ async function startTracker($: EngineInterface): Promise<void> {
   })
 }
 
-const track = (on: On): void => {
-  // Also after /clear, resume and fork, where no `session.start` fires.
-  on('classic.SessionStart', async ($, e, next) => {
-    await load($)
-    await setTitle($, e.session_title, true)
-    await save($, true)
-
-    return next(e)
-  })
-
-  on('classic.UserPromptSubmit', async ($, e, next) => {
-    await setTitle($, e.session_title, true)
-    if (!MACHINE_PROMPTS.has(e.source ?? 'user')) await setTitle($, e.prompt, false)
-
-    return next(e)
-  })
-
-  on('turn.start', async ($, e, next) => {
-    if (e.agentId === undefined) {
-      // The first prompt titles a session that has no title of its own.
-      await setTitle($, e.text, false)
-      await mark($, 'running')
-    }
-
-    return next(e)
-  })
-
-  on('turn.complete', async ($, e, next) => {
-    if (e.agentId === undefined) {
-      const reason = e.reason === 'answer' ? 'reply' : e.reason === 'aborted' ? 'interrupted' : 'error'
-      await mark($, 'waiting', reason)
-    }
-
-    return next(e)
-  })
-
-  on('classic.PermissionRequest', async ($, e, next) => {
-    await mark($, 'waiting', 'permission')
-
-    return next(e)
-  })
-
-  // The same moment where classic events do not reach this plugin (a managed
-  // install): an `ask` on a real call goes to the person's permission prompt.
-  on('tool.check', async ($, e, next) => {
-    const verdict = await next(e)
-    if (verdict.decision === 'ask' && e.tool_use_id !== undefined) {
-      await mark($, 'waiting', 'permission')
-    }
-
-    return verdict
-  })
-
-  on('classic.Elicitation', async ($, e, next) => {
-    await mark($, 'waiting', 'input')
-
-    return next(e)
-  })
-
-  on('tool.call', async ($, e, next) => {
-    const isQuestion = String(e.tool) === 'AskUserQuestion'
-    if (isQuestion) await mark($, 'waiting', 'question')
-    const result = await next(e)
-    if (isWaitingOnTool()) await mark($, 'running')
-    else await touch($)
-
-    return result
-  })
-
-  // A prompt answered without the tool finishing yet (a denial, an MCP form).
-  on('classic.PermissionDenied', async ($, e, next) => {
-    if (isWaitingOnTool()) await mark($, 'running')
-
-    return next(e)
-  })
-
-  on('classic.ElicitationResult', async ($, e, next) => {
-    if (isWaitingOnTool()) await mark($, 'running')
-
-    return next(e)
-  })
-
-  on('session.end', async ($, e, next) => {
-    const current = record?.id === e.sessionId ? record : await load($)
-    const now = await $.clock.now()
-    record = { ...current, status: 'ended', reason: e.reason, endedAt: now, lastActivityAt: now }
-    await save($, true)
-    record = undefined
-
-    return next(e)
-  })
-}
 
 const PANE = 'standup'
 const TITLE = 'Standup'
@@ -399,148 +528,3 @@ async function startBoard($: EngineInterface): Promise<void> {
   })
 }
 
-const board = (on: On): void => {
-  on('command.run', { command: 'standup' }, async $ => {
-    const opened = await openBoard($)
-
-    return {
-      text: opened.isPlaced
-        ? 'Standup board opened.'
-        : `Standup board will show when there is room: ${opened.reason}`,
-    }
-  })
-
-  on('ui.close', { id: PANE }, ($, e, next) => {
-    stopPolling()
-
-    return next(e)
-  })
-
-  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const table = $.ui.resolve(e)
-    const { Box, Text, Button } = table
-    const view = await read($, prefs)
-    const time = (await read($, now)) || (await $.clock.now())
-    const records = await read($, sessions)
-    const result: Board = buildBoard({
-      sessions: records,
-      overrides: await read($, overrides),
-      now: time,
-      env: view.env,
-      showEmpty: view.showEmpty,
-    })
-    const columns = Math.max(20, e.props.bodyColumns)
-    const isWide = columns >= WIDE_COLUMNS
-    const gap = 1
-    const columnWidth = isWide ? Math.floor((columns - gap * 3) / 4) : columns
-    const setEnv = (env: string) => savePrefs($, value => ({ ...value, env }))
-
-    const card = (item: Card) => {
-      const { record } = item
-      const inner = Math.max(8, columnWidth - 4)
-
-      return (
-        <Box
-          key={`box:${record.id}`}
-          flexDirection="column"
-          borderStyle="round"
-          borderColor={COLOR[item.column]}
-          paddingX={1}
-          width={columnWidth}
-        >
-          <Button
-            key={`card:${record.id}`}
-            plain
-            label={clip(titleOf(record), inner)}
-            onPress={press => copyResume($, record, press.surface)}
-          />
-          <Text dimColor>
-            {clip(`${item.envLabel} · ${statusText(item, time)}`, inner)}
-          </Text>
-          <Text dimColor>{clip(ago(record.lastActivityAt, time), inner)}</Text>
-          <Button
-            key={`review:${record.id}`}
-            plain
-            dimColor
-            label={item.isReview ? '↩ Out of review' : '→ Move to review'}
-            onPress={() => toggleReview($, record.id)}
-          />
-        </Box>
-      )
-    }
-
-    const tabs = () => (
-      <Box flexDirection="row" flexWrap="wrap" columnGap={3}>
-        {[{ key: ALL, label: 'All', waiting: result.total.waiting }, ...result.environments].map(
-          (tab, index) => (
-            <Box key={`tab:${index}`} flexDirection="row" columnGap={1}>
-              {tab.key === result.env ? (
-                <Text bold underline color="claude">
-                  {tab.label}
-                </Text>
-              ) : (
-                <Button key={`env:${index}`} plain dimColor label={tab.label} onPress={() => setEnv(tab.key)} />
-              )}
-              {tab.waiting > 0 && <Text color={COLOR.waiting}>{tab.waiting}</Text>}
-            </Box>
-          ),
-        )}
-      </Box>
-    )
-
-    const toggle = () =>
-      (result.hiddenEnvironments > 0 || view.showEmpty) && (
-        <Button
-          key="toggle-empty"
-          plain
-          dimColor
-          label={
-            view.showEmpty
-              ? 'Hide environments with no active sessions'
-              : `Show ${result.hiddenEnvironments} environment${result.hiddenEnvironments === 1 ? '' : 's'} with no active sessions`
-          }
-          onPress={() => savePrefs($, value => ({ ...value, showEmpty: !value.showEmpty }))}
-        />
-      )
-
-    const column = (entry: Board['columns'][number]) => (
-      <Box key={`col:${entry.id}`} flexDirection="column" width={columnWidth} rowGap={1}>
-        <Text bold color={COLOR[entry.id]}>
-          {entry.title} ({entry.cards.length})
-        </Text>
-        {entry.cards.length === 0 ? (
-          <Text dimColor>Nothing here</Text>
-        ) : (
-          entry.cards.map(card)
-        )}
-      </Box>
-    )
-
-    if (records.length === 0) {
-      return (
-        <Box flexDirection="column" rowGap={1}>
-          <Text bold>No sessions yet</Text>
-          <Text dimColor>
-            Every session with standup-board installed shows up here once it starts. The board
-            only sees sessions on this machine.
-          </Text>
-        </Box>
-      )
-    }
-
-    return (
-      <Box flexDirection="column" rowGap={1} width={columns}>
-        <Text key="summary">
-          <Text color={COLOR.running}>{result.total.active} active</Text>
-          <Text dimColor> · </Text>
-          <Text color={COLOR.waiting}>{result.total.waiting} waiting for you</Text>
-        </Text>
-        {tabs()}
-        {toggle()}
-        <Box flexDirection={isWide ? 'row' : 'column'} columnGap={gap} rowGap={1}>
-          {result.columns.map(column)}
-        </Box>
-      </Box>
-    )
-  })
-}
