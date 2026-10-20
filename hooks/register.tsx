@@ -485,9 +485,9 @@ async function savePrefs($: EngineInterface, change: (value: Prefs) => Prefs) {
 
 async function toggleReview($: EngineInterface, id: string) {
   const current = (await read($, overrides))[id]
-  const next: Override = { review: !current?.review, at: await $.clock.now() }
-  await $.fs.write(`${await overridesDir($)}/${fileName(id)}`, JSON.stringify(next))
-  await update($, overrides, all => ({ ...all, [id]: next }))
+  const flag: Override = { review: !current?.review, at: await $.clock.now() }
+  await $.fs.write(`${await overridesDir($)}/${fileName(id)}`, JSON.stringify(flag))
+  await update($, overrides, all => ({ ...all, [id]: flag }))
 }
 
 /** The surface's clipboard first; on macOS, where a remote surface has none yet, pbcopy. */
