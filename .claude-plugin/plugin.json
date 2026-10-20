@@ -1,11 +1,17 @@
 {
   "name": "standup-board",
+  "displayName": "Standup Board",
   "version": "0.1.0",
-  "description": "A Jira-style board of every Claude Code session on this machine: Running, Waiting for you, In review, Done.",
+  "description": "A Jira-style board of every Claude Code session on this machine.",
   "author": {
     "name": "ProsteAdam"
   },
   "license": "MIT",
+  "homepage": "https://github.com/Code-Growers/standup-board",
+  "repository": "https://github.com/Code-Growers/standup-board",
+  "documentationUrl": "https://github.com/Code-Growers/standup-board#readme",
+  "supportUrl": "https://github.com/Code-Growers/standup-board/issues",
+  "privacyPolicyUrl": "https://github.com/Code-Growers/standup-board/blob/main/PRIVACY.md",
   "keywords": [
     "sessions",
     "board",
