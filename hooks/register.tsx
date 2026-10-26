@@ -397,7 +397,7 @@ async function overridesDir($: EngineInterface): Promise<string> {
 const fileName = (id: string): string => `${id.replace(/[^\w-]/g, '')}.json`
 
 /** This build, as plugin.json names it; each session records the one it runs. */
-const PLUGIN_VERSION = '0.2.0'
+const PLUGIN_VERSION = '0.3.0'
 const HEARTBEAT_MS = 60_000
 /** Activity alone (no status change) is written at most this often. */
 const ACTIVITY_WRITE_MS = 15_000
