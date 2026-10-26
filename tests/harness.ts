@@ -30,6 +30,8 @@ export type WorldOptions = {
   /** Whether the surface's own clipboard takes a copy (remote surfaces: no). */
   isClipboard?: boolean
   hostSessionId?: string
+  /** The engine version `$.session.version()` answers; styled buttons need 2.1.299. */
+  version?: string
   /** The transcript a session already holds when the mod loads into it. */
   history?: { role: 'user' | 'assistant'; text: string }[]
 }
@@ -88,6 +90,11 @@ export const world = (on: On, options: WorldOptions = {}): World => {
   on('session.id', () => ({ value: options.sessionId ?? 'sess-test' }))
   on('session.cwd', () => ({ value: cwd }))
   on('session.root', () => ({ value: cwd }))
+  on('session.version', () => {
+    const version = options.version ?? '2.1.308'
+
+    return { value: { version, base: version } } as never
+  })
   on('session.messages', () => ({
     value: (options.history ?? []).map(message => ({ ...message, toolUses: [] })),
   }) as never)

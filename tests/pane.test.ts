@@ -52,10 +52,12 @@ describe('board pane', () => {
       ])
       const running = await ui.find({ type: 'Box', key: 'col:running' })
       expect(running?.props.width).toBe(Math.floor((WIDE - 3) / 4))
-      expect(await ui.find({ type: 'Text', text: 'Add rate limiting' })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: 'needs permission · 4m ago' })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /gone quiet · 20m ago/ })).toBeDefined()
-      expect((await ui.find({ key: 'copy:a2' }))?.props.label).toBe('⧉ Copy resume')
+      const card = (await ui.find({ key: 'open:a2' }))?.text ?? ''
+      expect(card).toContain('Add rate limiting')
+      expect(card).toContain('needs permission')
+      expect(card).toContain('4m ago')
+      expect((await ui.find({ key: 'open:w4' }))?.text).toContain('gone quiet')
+      expect((await ui.find({ key: 'copy:a2' }))?.props.label).toBe('⧉ Copy')
       if (surface === 'terminal') {
         expect(await ui.find({ type: 'Text', text: /5 active/ })).toBeDefined()
       } else {
@@ -81,36 +83,32 @@ describe('board pane', () => {
       await ui.unmount()
     })
 
-    test(`${surface}: environment tabs are text, with waiting counts`, async ($, on) => {
+    test(`${surface}: project tabs are one kind of button, the current one highlighted`, async ($, on) => {
       const w = await openBoard($, on)
       const ui = await mount($, surface, WIDE)
-      const current = await ui.find({ type: 'Text', text: 'All' })
-      expect(current?.props).toMatchObject({ bold: true, backgroundColor: PALETTE.accent })
-      expect(await ui.find({ key: 'env:0' })).toBe(undefined)
-      expect((await ui.find({ key: 'env:1' }))?.props).toMatchObject({ label: 'api', plain: true })
-      expect((await ui.find({ key: 'env:2' }))?.props.label).toBe('web')
-      expect(await ui.find({ key: 'env:3' })).toBe(undefined)
-      const counts = await ui.findAll({ type: 'Text', text: /^ \d+ $/ })
-      expect(counts.map(found => [found.text.trim(), found.props.backgroundColor])).toEqual([
+      const tabs = (await ui.findAll({ type: 'Button' })).filter(found => found.key?.startsWith('env:'))
+      expect(tabs.map(found => found.text)).toEqual(['All 2', 'api 2', 'web'])
+      expect((await ui.find({ type: 'Text', text: 'All' }))?.props).toMatchObject({
+        bold: true,
+        underline: true,
+        color: PALETTE.accent,
+      })
+      expect((await ui.find({ type: 'Text', text: 'web' }))?.props.dimColor).toBe(true)
+      const counts = await ui.findAll({ type: 'Text', text: /^ \d+$/ })
+      expect(counts.map(found => [found.text.trim(), found.props.color])).toEqual([
         ['2', PALETTE.waiting],
         ['2', PALETTE.waiting],
       ])
 
       await ui.press({ key: 'env:1' })
-      expect(await ui.find({ key: 'env:1' })).toBe(undefined)
       expect((await ui.find({ type: 'Text', text: 'api' }))?.props.bold).toBe(true)
-      expect((await ui.find({ key: 'env:0' }))?.props.label).toBe('All')
       expect(await headers(ui)).toEqual([
         'Running (1)',
         'Waiting for you (2)',
         'In review (0)',
         'Done (0)',
       ])
-      expect(w.store.get('prefs')).toEqual({
-        env: '/Users/tester/code/api',
-        showEmpty: false,
-        showAllProjects: false,
-      })
+      expect(w.store.get('prefs')).toEqual({ env: '/Users/tester/code/api', showEmpty: false })
       await ui.unmount()
     })
 
@@ -119,7 +117,7 @@ describe('board pane', () => {
       const ui = await mount($, surface, WIDE)
       expect((await ui.find({ key: 'toggle-empty' }))?.text).toContain('Show 1 idle project')
       await ui.press({ key: 'toggle-empty' })
-      expect((await ui.find({ key: 'env:3' }))?.props.label).toBe('infra')
+      expect((await ui.find({ key: 'env:3' }))?.text).toBe('infra')
       expect((await ui.find({ key: 'toggle-empty' }))?.text).toContain('Hide')
       await ui.unmount()
     })
@@ -155,34 +153,54 @@ describe('board pane', () => {
     })
   }
 
-  test('desktop: many projects collapse behind "+N more", the current one kept in view', async ($, on) => {
+  test('desktop: every project shows, with no "+N more", the idle toggle at the row end', async ($, on) => {
     const files = fixtureFiles()
     for (let i = 0; i < 12; i += 1) {
-      const record = {
+      const folder = `/Users/tester/code/project-${String(i).padStart(2, '0')}`
+      files[`${SESSIONS}/p${i}.json`] = JSON.stringify({
         version: 1,
         id: `p${i}`,
         title: `Project ${i} work`,
-        groupKey: `/Users/tester/code/project-${String(i).padStart(2, '0')}`,
-        cwd: `/Users/tester/code/project-${String(i).padStart(2, '0')}`,
+        groupKey: folder,
+        cwd: folder,
         status: 'running',
         startedAt: NOW,
         lastActivityAt: NOW,
         heartbeatAt: NOW,
-      }
-      files[`${SESSIONS}/p${i}.json`] = JSON.stringify(record)
+      })
     }
-    const w = await openBoard($, on, { files })
+    await openBoard($, on, { files })
     const ui = await mount($, 'desktop', WIDE)
-    expect((await ui.findAll({ type: 'Button' })).filter(found => found.key?.startsWith('env:')).length).toBe(8)
-    expect((await ui.find({ key: 'more-projects' }))?.props.label).toBe('+6 more')
+    const buttons = await ui.findAll({ type: 'Button' })
+    expect(buttons.filter(found => found.key?.startsWith('env:')).length).toBe(15)
+    expect(await ui.find({ key: 'more-projects' })).toBe(undefined)
+    const keys = buttons.map(found => found.key)
+    expect(keys.indexOf('toggle-empty')).toBe(keys.indexOf('env:14') + 1)
+    await ui.unmount()
+  })
 
-    await ui.press({ key: 'more-projects' })
-    expect((await ui.find({ key: 'more-projects' }))?.props.label).toBe('Fewer')
-    expect((await ui.findAll({ type: 'Button' })).filter(found => found.key?.startsWith('env:')).length).toBe(14)
-    await ui.press({ key: 'env:13' })
-    await ui.press({ key: 'more-projects' })
-    expect((await ui.find({ key: 'more-projects' }))?.props.label).toBe('+5 more')
-    expect(w.store.get('prefs')).toMatchObject({ showAllProjects: false })
+  test('desktop: pressing a card opens its session in Claude', async ($, on) => {
+    const w = await openBoard($, on)
+    const ui = await mount($, 'desktop', WIDE)
+    await ui.press({ key: 'open:a2' })
+    expect(w.runs).toEqual([['open', 'claude://code/continue?session=local_a2-desk']])
+    expect(w.toasts.at(-1)).toBe('Opening the session in Claude')
+    expect((await ui.find({ key: 'go:a2' }))?.props.label).toBe('↗ Open')
+
+    // A session started in a terminal has no desktop id: its resume command is copied.
+    await ui.press({ key: 'open:a1' })
+    expect(w.copies).toEqual(['cd /Users/tester/code/api && claude --resume a1'])
+    expect(await ui.find({ key: 'go:a1' })).toBe(undefined)
+    await ui.unmount()
+  })
+
+  test('desktop: an engine before 2.1.299 gets plain labels', async ($, on) => {
+    await openBoard($, on, { version: '2.1.288' })
+    const ui = await mount($, 'desktop', WIDE)
+    expect((await ui.find({ key: 'env:0' }))?.props.label).toBe('▸ All 2')
+    expect((await ui.find({ key: 'env:1' }))?.props.label).toBe('api 2')
+    expect(await ui.find({ key: 'open:a2' })).toBe(undefined)
+    expect((await ui.find({ key: 'go:a2' }))?.props.label).toBe('↗ Open')
     await ui.unmount()
   })
 

@@ -21,7 +21,7 @@ stands in for the buddy:
 ```text
 5 active · 2 waiting for you
 
- All  2   api  2   web   Show 1 idle project
+▸ All 2   api 2   web     Show 1 idle project
 
 ● Running (2)
 ╭──────────────────────────────────────╮
@@ -29,7 +29,7 @@ stands in for the buddy:
 │   web                                │
 │   running · just now                 │
 │                                      │
-│ ⧉ Copy resume  → Review              │
+│ ⧉ Copy  → Review                     │
 ╰──────────────────────────────────────╯
 
 ╭──────────────────────────────────────╮
@@ -37,7 +37,7 @@ stands in for the buddy:
 │   api                                │
 │   running · 1m ago                   │
 │                                      │
-│ ⧉ Copy resume  → Review              │
+│ ⧉ Copy  → Review                     │
 ╰──────────────────────────────────────╯
 
 ● Waiting for you (2)
@@ -46,7 +46,7 @@ stands in for the buddy:
 │   api                                │
 │   needs permission · 4m ago          │
 │                                      │
-│ ⧉ Copy resume  → Review              │
+│ ↗ Open  ⧉ Copy  → Review             │
 ╰──────────────────────────────────────╯
 
 ╭──────────────────────────────────────╮
@@ -54,7 +54,7 @@ stands in for the buddy:
 │   api                                │
 │   needs your reply · 22m ago         │
 │                                      │
-│ ⧉ Copy resume  → Review              │
+│ ⧉ Copy  → Review                     │
 ╰──────────────────────────────────────╯
 
 ● In review (1)
@@ -63,7 +63,7 @@ stands in for the buddy:
 │   web                                │
 │   needs your reply · 2h ago          │
 │                                      │
-│ ⧉ Copy resume  ↩ Out of review       │
+│ ⧉ Copy  ↩ Out of review              │
 ╰──────────────────────────────────────╯
 
 ● Done (3)
@@ -72,7 +72,7 @@ stands in for the buddy:
 │   web                                │
 │   gone quiet · 20m ago               │
 │                                      │
-│ ⧉ Copy resume  → Review              │
+│ ⧉ Copy  → Review                     │
 ╰──────────────────────────────────────╯
 
 ╭──────────────────────────────────────╮
@@ -80,7 +80,7 @@ stands in for the buddy:
 │   web                                │
 │   ended · 3h ago                     │
 │                                      │
-│ ⧉ Copy resume  → Review              │
+│ ⧉ Copy  → Review                     │
 ╰──────────────────────────────────────╯
 
 ╭──────────────────────────────────────╮
@@ -88,7 +88,7 @@ stands in for the buddy:
 │   infra                              │
 │   ended · 5h ago                     │
 │                                      │
-│ ⧉ Copy resume  → Review              │
+│ ⧉ Copy  → Review                     │
 ╰──────────────────────────────────────╯
 ```
 
@@ -129,20 +129,23 @@ group is labelled with its folder name, plus the parent folder when two names
 clash.
 
 - The tabs at the top switch between **All** and one board per project. The
-  current one is an orange pill, and the amber pill beside a tab is how many
-  sessions there are waiting for you.
-- Projects that need you most come first. After 8 tabs (4 in a narrow pane)
-  the rest fold into **+N more**; the project you're viewing always stays in
-  sight.
-- Projects with no active session are hidden; **Show N idle projects** at the
-  end of the tabs shows them.
+  current one is bold, underlined and orange, and the amber number in a tab is
+  how many sessions there are waiting for you.
+- Projects that need you most come first; the tabs wrap onto more lines when
+  there are many.
+- Projects with no active session are hidden; **Show N idle projects**, at the
+  right end of the tabs, shows them.
 - The board remembers the project you viewed last.
 - In a narrow pane the tabs wrap onto more lines and the columns stack.
 
-**Opening a session.** A mod can't open or focus another session, so a card's
-**⧉ Copy resume** copies `cd <folder> && claude --resume <id>` to your clipboard. Paste it
-in a terminal, or find the session by its title in the desktop sidebar. On the desktop the copy goes through macOS `pbcopy`, because the
-desktop app doesn't expose its clipboard to mods yet.
+**Opening a session.** Press a card (or its **↗ Open**) to open that session in
+the Claude desktop app. The board asks the operating system to open the
+desktop app's own link, `claude://code/continue?session=local_…`.
+
+A session started in a terminal has no desktop session, so pressing it copies
+`cd <folder> && claude --resume <id>` instead. **⧉ Copy** copies that
+command for any card. On the desktop the copy goes through macOS `pbcopy`,
+because the desktop app doesn't give mods a clipboard yet.
 
 ## Install
 
@@ -196,7 +199,7 @@ Type `/standup` to open the board. It refreshes every 2 seconds while open.
   writes there.
 - The board reads both folders and rereads only the files that changed. If it
   catches a file mid-write, it keeps the last good copy.
-- Your view (last project, the idle-projects and +N more toggles) is kept in the mod's own
+- Your view (last project, the idle-projects toggle) is kept in the mod's own
   store.
 
 ## What it reads, writes, runs and sends
@@ -221,14 +224,21 @@ runs or obeys them.
 - The environment variables `HOME` and `USERPROFILE` (to find `~/.claude`) and
   `CLAUDE_CODE_HOST_SESSION_ID` (the desktop app's id for the session).
 
-**Runs.** One program: `pbcopy` (macOS), only when you press **⧉ Copy resume** on a card. It gets
-the session's resume command (`cd <folder> && claude --resume <id>`) on its
-standard input and puts it on your clipboard. The desktop app doesn't give
-plugins a clipboard yet, so this is how the copy works there. Where the
-surface has its own clipboard (the terminal), `pbcopy` isn't run.
+**Runs.** Only when you press something on a card:
+
+- **Open** runs `open` (macOS), `xdg-open` (Linux) or `cmd /c start`
+  (Windows) with the desktop app's link
+  `claude://code/continue?session=local_…`, so the app shows that session.
+  The id comes from the session's own record and must match the app's
+  `local_…` pattern.
+- **Copy** runs `pbcopy` (macOS) with the session's resume command
+  (`cd <folder> && claude --resume <id>`) on its standard input, to put it on
+  your clipboard. Where the surface has its own clipboard (the terminal),
+  `pbcopy` isn't run.
 
 **Sends.** Nothing leaves your machine. The plugin makes no network requests
-and no model calls. The resume command goes only to your clipboard.
+and no model calls. The resume command goes only to your clipboard, and the
+open link only to the desktop app on this machine.
 
 **Hooks.** Every hook only observes and passes the event on unchanged. None of
 them blocks, rewrites or answers anything, and none of them decides a
@@ -261,7 +271,9 @@ claude plugin validate --strict .
 claude plugin test .
 ```
 
-The tests run against fixture sessions (`tests/fixtures.ts`). They cover:
+The tests run against fixture sessions (`tests/fixtures.ts`) and need Claude
+Code 2.1.299 or later, which draws styled text inside buttons. The plugin itself
+runs on 2.1.288 too, with plain labels. They cover:
 
 - the column and grouping rules
 - the tracker's status changes

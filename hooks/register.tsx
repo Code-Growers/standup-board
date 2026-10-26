@@ -128,6 +128,7 @@ export const register: Register = on => {
     const { Box, Text, Button } = table
     // The terminal's table still names Svg, drawn as nothing: ask the surface.
     const Svg = e.surface !== 'terminal' && 'Svg' in table ? table.Svg : undefined
+    const rich = await hasRichButtons($)
     const view = await read($, prefs)
     const time = (await read($, now)) || (await $.clock.now())
     const records = await read($, sessions)
@@ -149,6 +150,11 @@ export const register: Register = on => {
       const mood = moodOf(item, time)
       const color = moodColor(mood)
       const inner = Math.max(8, columnWidth - 4 - (Svg ? 7 : 2))
+      const title = clip(titleOf(record), inner)
+      const project = clip(item.envLabel, inner)
+      const status = statusText(item, time)
+      const since = ` · ${ago(record.lastActivityAt, time)}`
+      const canOpen = record.hostSessionId !== undefined && HOST_SESSION.test(record.hostSessionId)
       const waited = (time - record.lastActivityAt) / 3_600_000
       const progress =
         mood === 'working' ? 'busy' : item.column === 'waiting' ? Math.min(1, waited) : undefined
@@ -176,14 +182,29 @@ export const register: Register = on => {
                 {GLYPH[mood]}
               </Text>
             )}
-            <Box flexDirection="column" flexGrow={1}>
-              <Text bold>{clip(titleOf(record), inner)}</Text>
-              <Text dimColor>{clip(item.envLabel, inner)}</Text>
-              <Text>
-                <Text color={color}>{statusText(item, time)}</Text>
-                <Text dimColor> · {ago(record.lastActivityAt, time)}</Text>
-              </Text>
-            </Box>
+            {!rich ? (
+              <Box flexDirection="column" flexGrow={1}>
+                <Text bold>{title}</Text>
+                <Text dimColor>{project}</Text>
+                <Text>
+                  <Text color={color}>{status}</Text>
+                  <Text dimColor>{since}</Text>
+                </Text>
+              </Box>
+            ) : (
+              <Button
+                key={`open:${record.id}`}
+                plain
+                onPress={press => openSession($, record, press.surface)}
+              >
+                <Text bold>{title}</Text>
+                {'\n'}
+                <Text dimColor>{project}</Text>
+                {'\n'}
+                <Text color={color}>{status}</Text>
+                <Text dimColor>{since}</Text>
+              </Button>
+            )}
           </Box>
           {Svg && progress !== undefined && (
             <Svg
@@ -200,11 +221,20 @@ export const register: Register = on => {
             columnGap={2}
             marginTop={1}
           >
+            {canOpen && (
+              <Button
+                key={`go:${record.id}`}
+                plain
+                dimColor
+                label="↗ Open"
+                onPress={press => openSession($, record, press.surface)}
+              />
+            )}
             <Button
               key={`copy:${record.id}`}
               plain
               dimColor
-              label="⧉ Copy resume"
+              label="⧉ Copy"
               onPress={press => copyResume($, record, press.surface)}
             />
             <Button
@@ -219,53 +249,45 @@ export const register: Register = on => {
       )
     }
 
-    const tabs = () => {
-      const all = [{ key: ALL, label: 'All', waiting: result.total.waiting }, ...result.environments]
-      const limit = (isWide ? MAX_TABS_WIDE : MAX_TABS_NARROW) + 1
-      // The current project stays in view even when it sorts past the limit.
-      const shown = all
-        .map((tab, index) => ({ ...tab, index }))
-        .filter(tab => view.showAllProjects || tab.index < limit || tab.key === result.env)
-      const hidden = all.length - shown.length
+    const tabs = () => (
+      <Box flexDirection="row" columnGap={2} alignItems="flex-start">
+        <Box flexDirection="row" flexWrap="wrap" columnGap={2} flexGrow={1} flexShrink={1}>
+          {[{ key: ALL, label: 'All', waiting: result.total.waiting }, ...result.environments].map(
+            (tab, index) => {
+              const isCurrent = tab.key === result.env
+              const count = tab.waiting > 0 ? ` ${tab.waiting}` : ''
 
-      return (
-        <Box flexDirection="row" flexWrap="wrap" columnGap={2} alignItems="center">
-          {shown.map(tab => (
-            <Box key={`tab:${tab.index}`} flexDirection="row" columnGap={1}>
-              {tab.key === result.env ? (
-                <Text bold color={INK} backgroundColor={PALETTE.accent}>
-                  {` ${tab.label} `}
-                </Text>
+              return rich ? (
+                <Button key={`env:${index}`} plain onPress={() => setEnv(tab.key)}>
+                  <Text
+                    bold={isCurrent}
+                    underline={isCurrent}
+                    color={isCurrent ? PALETTE.accent : undefined}
+                    dimColor={!isCurrent}
+                  >
+                    {tab.label}
+                  </Text>
+                  {count && (
+                    <Text bold color={PALETTE.waiting}>
+                      {count}
+                    </Text>
+                  )}
+                </Button>
               ) : (
                 <Button
-                  key={`env:${tab.index}`}
+                  key={`env:${index}`}
                   plain
-                  dimColor
-                  label={tab.label}
+                  dimColor={!isCurrent}
+                  label={`${isCurrent ? '▸ ' : ''}${tab.label}${count}`}
                   onPress={() => setEnv(tab.key)}
                 />
-              )}
-              {tab.waiting > 0 && (
-                <Text bold color={INK} backgroundColor={PALETTE.waiting}>
-                  {` ${tab.waiting} `}
-                </Text>
-              )}
-            </Box>
-          ))}
-          {(hidden > 0 || (view.showAllProjects && all.length > limit)) && (
-            <Button
-              key="more-projects"
-              plain
-              label={view.showAllProjects ? 'Fewer' : `+${hidden} more`}
-              onPress={() =>
-                savePrefs($, value => ({ ...value, showAllProjects: !value.showAllProjects }))
-              }
-            />
+              )
+            },
           )}
-          {toggle()}
         </Box>
-      )
-    }
+        {toggle()}
+      </Box>
+    )
 
     const toggle = () =>
       (result.hiddenEnvironments > 0 || view.showEmpty) && (
@@ -469,11 +491,6 @@ const POLL_MS = 2_000
 const CLOCK_STEP_MS = 30_000
 /** Below this many columns the board stacks its columns instead of setting them side by side. */
 const WIDE_COLUMNS = 88
-/** Project tabs shown before "+N more", besides All. */
-const MAX_TABS_WIDE = 8
-const MAX_TABS_NARROW = 4
-/** Text on a coloured pill. */
-const INK = '#16171a'
 
 const sessions = atom({ plugin: 'standup-board', key: 'sessions' } as const, [])
 const overrides = atom({ plugin: 'standup-board', key: 'overrides' } as const, {})
@@ -481,7 +498,6 @@ const now = atom({ plugin: 'standup-board', key: 'now' } as const, 0)
 const prefs = atom({ plugin: 'standup-board', key: 'prefs' } as const, {
   env: ALL,
   showEmpty: false,
-  showAllProjects: false,
 })
 
 type Cached<T> = { mtimeMs: number; size: number; value: T | undefined }
@@ -590,6 +606,16 @@ async function copy($: EngineInterface, text: string, surface: RenderSurface) {
   return run?.exitCode === 0
 }
 
+/** Claude Code 2.1.299 and later draw styled text inside a Button; earlier ones take a plain label. */
+async function hasRichButtons($: EngineInterface): Promise<boolean> {
+  const found = await $.session.version().catch(() => undefined)
+  const [major = 0, minor = 0, patch = 0] = (found?.base ?? found?.version ?? '')
+    .split(/[.-]/)
+    .map(Number)
+
+  return major > 2 || (major === 2 && (minor > 1 || (minor === 1 && patch >= 299)))
+}
+
 async function copyResume($: EngineInterface, record: SessionRecord, surface: RenderSurface) {
   const isCopied = await copy($, resumeCommand(record), surface)
   $.ui.toast(
@@ -597,6 +623,27 @@ async function copyResume($: EngineInterface, record: SessionRecord, surface: Re
       ? 'Resume command copied: paste it in a terminal'
       : `Could not copy. Resume it with: ${resumeCommand(record)}`,
   )
+}
+
+/** The desktop app's own session ids, the only ones its deep link takes. */
+const HOST_SESSION = /^local_[A-Za-z0-9-]{1,64}$/
+
+/** Opens the session in the desktop app; one it can't open has its resume command copied. */
+async function openSession($: EngineInterface, record: SessionRecord, surface: RenderSurface) {
+  const id = record.hostSessionId
+  if (id && HOST_SESSION.test(id)) {
+    const url = `claude://code/continue?session=${id}`
+    const isWindows = (await $.env.get('OS')) === 'Windows_NT'
+    const commands = isWindows ? [['cmd', '/c', 'start', '', url]] : [['open', url], ['xdg-open', url]]
+    for (const argv of commands) {
+      const run = await $.process.run(argv, { timeoutMs: 5_000 }).catch(() => undefined)
+      if (run?.exitCode === 0) {
+        $.ui.toast('Opening the session in Claude')
+        return
+      }
+    }
+  }
+  await copyResume($, record, surface)
 }
 
 const titleOf = (record: SessionRecord): string =>
@@ -608,7 +655,6 @@ async function startBoard($: EngineInterface): Promise<void> {
     await update($, prefs, () => ({
       env: typeof saved.env === 'string' ? saved.env : ALL,
       showEmpty: saved.showEmpty === true,
-      showAllProjects: saved.showAllProjects === true,
     }))
   }
   // A hot reload keeps the pane up but drops the timer: start it again.

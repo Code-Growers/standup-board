@@ -28,7 +28,9 @@ const session = (
 
 export const FIXTURE_SESSIONS: SessionRecord[] = [
   session('a1', 'Fix OAuth token refresh', 'api', 'running', undefined, 1),
-  session('a2', 'Add rate limiting to /v2/search', 'api', 'waiting', 'permission', 4),
+  session('a2', 'Add rate limiting to /v2/search', 'api', 'waiting', 'permission', 4, {
+    hostSessionId: 'local_a2-desk',
+  }),
   session('a3', 'Write migration for the invoices table', 'api', 'waiting', 'reply', 22),
   session('w1', 'Redesign the settings page', 'web', 'running', undefined, 0),
   session('w2', 'Upgrade to React 19', 'web', 'waiting', 'reply', 120),
