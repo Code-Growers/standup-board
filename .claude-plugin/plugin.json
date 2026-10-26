@@ -1,7 +1,7 @@
 {
   "name": "standup-board",
   "displayName": "Standup Board",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A Jira-style board of every Claude Code session on this machine.",
   "author": {
     "name": "ProsteAdam"

@@ -7,14 +7,16 @@ what is waiting on you, and what you are reviewing.
 
 ## Preview
 
-A wide pane in the desktop app sets the four columns side by side:
+In the desktop app each card has a little buddy that shows what the session is
+doing, with a glow in its column's colour, and ring gauges count the columns:
 
 ![The standup board in a wide desktop pane](docs/screenshot.svg)
 
-A narrow pane (or the terminal) stacks them:
+A narrow pane stacks the columns. The terminal draws no pictures, so a glyph
+stands in for the buddy:
 
 <details>
-<summary>Narrow pane, 40 columns</summary>
+<summary>Terminal, 40 columns</summary>
 
 ```text
 5 active · 2 waiting for you
@@ -24,63 +26,63 @@ All 2   api 2   web
 
 Show 1 environment with no active sessions
 
-Running (2)
+● Running (2)
 ╭──────────────────────────────────────╮
-│ Redesign the settings page           │
-│ web · running                        │
-│ just now                             │
+│ ✻ Redesign the settings page         │
+│   web · running                      │
+│   just now                           │
 │ → Move to review                     │
 ╰──────────────────────────────────────╯
 
 ╭──────────────────────────────────────╮
-│ Fix OAuth token refresh              │
-│ api · running                        │
-│ 1m ago                               │
+│ ✻ Fix OAuth token refresh            │
+│   api · running                      │
+│   1m ago                             │
 │ → Move to review                     │
 ╰──────────────────────────────────────╯
 
-Waiting for you (2)
+● Waiting for you (2)
 ╭──────────────────────────────────────╮
-│ Add rate limiting to /v2/search      │
-│ api · needs permission               │
-│ 4m ago                               │
+│ ⚿ Add rate limiting to /v2/search    │
+│   api · needs permission             │
+│   4m ago                             │
 │ → Move to review                     │
 ╰──────────────────────────────────────╯
 
 ╭──────────────────────────────────────╮
-│ Write migration for the invoices ta… │
-│ api · needs your reply               │
-│ 22m ago                              │
+│ ! Write migration for the invoices … │
+│   api · needs your reply             │
+│   22m ago                            │
 │ → Move to review                     │
 ╰──────────────────────────────────────╯
 
-In review (1)
+● In review (1)
 ╭──────────────────────────────────────╮
-│ Upgrade to React 19                  │
-│ web · needs your reply               │
-│ 2h ago                               │
+│ ◎ Upgrade to React 19                │
+│   web · needs your reply             │
+│   2h ago                             │
 │ ↩ Out of review                      │
 ╰──────────────────────────────────────╯
 
-Done (3)
+● Done (3)
 ╭──────────────────────────────────────╮
-│ Investigate the memory leak          │
-│ web · gone quiet                     │
-│ 20m ago                              │
+│ z Investigate the memory leak        │
+│   web · gone quiet                   │
+│   20m ago                            │
 │ → Move to review                     │
 ╰──────────────────────────────────────╯
 
 ╭──────────────────────────────────────╮
-│ Fix the flaky checkout e2e test      │
-│ web · ended                          │
-│ 3h ago                               │
+│ z Fix the flaky checkout e2e test    │
+│   web · ended                        │
+│   3h ago                             │
 │ → Move to review                     │
 ╰──────────────────────────────────────╯
 
 ╭──────────────────────────────────────╮
-│ Rotate the staging certificates      │
-│ infra · ended                        │
-│ 5h ago                               │
+│ z Rotate the staging certificates    │
+│   infra · ended                      │
+│   5h ago                             │
 │ → Move to review                     │
 ╰──────────────────────────────────────╯
 ```
@@ -104,6 +106,16 @@ sessions on other computers never write there, so they don't show up.
 
 Each card shows the session title, its environment, its status (for example
 "needs permission" or "needs your reply") and the time since its last activity.
+
+| Buddy (desktop) | Glyph (terminal) | Means |
+| --- | --- | --- |
+| Typing on a laptop, with a moving bar | `✻` | Running |
+| Waving with a `!` bubble; the bar fills over the first hour | `!` | Waiting for your reply |
+| `?`, lock, pencil, `…` or red `!` bubble | `?` `⚿` `✎` `…` `✕` | A question, a permission prompt, an input form, interrupted, or stopped on an error |
+| Holding a magnifier | `◎` | In review |
+| Asleep | `z` | Done |
+
+The buddy is this plugin's own character, not Anthropic's logo or mascot.
 
 **Environments.** Mods can't read the desktop app's environment names, so
 sessions are grouped by **git repository**. A worktree session groups with its

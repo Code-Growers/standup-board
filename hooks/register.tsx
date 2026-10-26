@@ -15,7 +15,8 @@ import {
   resumeCommand,
   statusText,
 } from './board'
-import type { Board, Card, ColumnId } from './board'
+import type { Board, Card } from './board'
+import { GLYPH, PALETTE, bar, buddy, isLively, moodColor, moodOf, rings } from './art'
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
@@ -125,6 +126,8 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const table = $.ui.resolve(e)
     const { Box, Text, Button } = table
+    // The terminal's table still names Svg, drawn as nothing: ask the surface.
+    const Svg = e.surface !== 'terminal' && 'Svg' in table ? table.Svg : undefined
     const view = await read($, prefs)
     const time = (await read($, now)) || (await $.clock.now())
     const records = await read($, sessions)
@@ -143,27 +146,58 @@ export const register: Register = on => {
 
     const card = (item: Card) => {
       const { record } = item
-      const inner = Math.max(8, columnWidth - 4)
+      const mood = moodOf(item, time)
+      const color = moodColor(mood)
+      const inner = Math.max(8, columnWidth - 4 - (Svg ? 7 : 2))
+      const waited = (time - record.lastActivityAt) / 3_600_000
+      const progress =
+        mood === 'working' ? 'busy' : item.column === 'waiting' ? Math.min(1, waited) : undefined
 
       return (
         <Box
           key={`box:${record.id}`}
           flexDirection="column"
           borderStyle="round"
-          borderColor={COLOR[item.column]}
+          borderColor={color}
           paddingX={1}
           width={columnWidth}
         >
-          <Button
-            key={`card:${record.id}`}
-            plain
-            label={clip(titleOf(record), inner)}
-            onPress={press => copyResume($, record, press.surface)}
-          />
-          <Text dimColor>
-            {clip(`${item.envLabel} · ${statusText(item, time)}`, inner)}
-          </Text>
-          <Text dimColor>{clip(ago(record.lastActivityAt, time), inner)}</Text>
+          <Box flexDirection="row" columnGap={1}>
+            {Svg ? (
+              <Svg
+                source={buddy(mood)}
+                alt={statusText(item, time)}
+                width={44}
+                height={44}
+                isInteractive={isLively(mood) || undefined}
+              />
+            ) : (
+              <Text bold color={color}>
+                {GLYPH[mood]}
+              </Text>
+            )}
+            <Box flexDirection="column" flexGrow={1}>
+              <Button
+                key={`card:${record.id}`}
+                plain
+                label={clip(titleOf(record), inner)}
+                onPress={press => copyResume($, record, press.surface)}
+              />
+              <Text>
+                <Text dimColor>{clip(item.envLabel, Math.max(4, inner - 20))} · </Text>
+                <Text color={color}>{statusText(item, time)}</Text>
+              </Text>
+              <Text dimColor>{clip(ago(record.lastActivityAt, time), inner)}</Text>
+            </Box>
+          </Box>
+          {Svg && progress !== undefined && (
+            <Svg
+              source={bar(color, progress)}
+              alt={progress === 'busy' ? 'Working' : `Waiting ${ago(record.lastActivityAt, time)}`}
+              height={6}
+              isInteractive={progress === 'busy' || undefined}
+            />
+          )}
           <Button
             key={`review:${record.id}`}
             plain
@@ -181,13 +215,13 @@ export const register: Register = on => {
           (tab, index) => (
             <Box key={`tab:${index}`} flexDirection="row" columnGap={1}>
               {tab.key === result.env ? (
-                <Text bold underline color="claude">
+                <Text bold underline color={PALETTE.accent}>
                   {tab.label}
                 </Text>
               ) : (
                 <Button key={`env:${index}`} plain dimColor label={tab.label} onPress={() => setEnv(tab.key)} />
               )}
-              {tab.waiting > 0 && <Text color={COLOR.waiting}>{tab.waiting}</Text>}
+              {tab.waiting > 0 && <Text color={PALETTE.waiting}>{tab.waiting}</Text>}
             </Box>
           ),
         )}
@@ -211,8 +245,8 @@ export const register: Register = on => {
 
     const column = (entry: Board['columns'][number]) => (
       <Box key={`col:${entry.id}`} flexDirection="column" width={columnWidth} rowGap={1}>
-        <Text bold color={COLOR[entry.id]}>
-          {entry.title} ({entry.cards.length})
+        <Text bold color={PALETTE[entry.id]}>
+          ● {entry.title} ({entry.cards.length})
         </Text>
         {entry.cards.length === 0 ? (
           <Text dimColor>Nothing here</Text>
@@ -236,11 +270,27 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column" rowGap={1} width={columns}>
-        <Text key="summary">
-          <Text color={COLOR.running}>{result.total.active} active</Text>
-          <Text dimColor> · </Text>
-          <Text color={COLOR.waiting}>{result.total.waiting} waiting for you</Text>
-        </Text>
+        {Svg ? (
+          <Svg
+            source={rings(
+              result.columns.map(entry => ({
+                label: entry.id === 'waiting' ? 'WAITING' : entry.title.toUpperCase(),
+                count: entry.cards.length,
+                color: PALETTE[entry.id],
+              })),
+              result.columns.reduce((sum, entry) => sum + entry.cards.length, 0),
+            )}
+            alt={`${result.total.active} active, ${result.total.waiting} waiting for you`}
+            width={288}
+            height={80}
+          />
+        ) : (
+          <Text key="summary">
+            <Text color={PALETTE.running}>{result.total.active} active</Text>
+            <Text dimColor> · </Text>
+            <Text color={PALETTE.waiting}>{result.total.waiting} waiting for you</Text>
+          </Text>
+        )}
         {tabs()}
         {toggle()}
         <Box flexDirection={isWide ? 'row' : 'column'} columnGap={gap} rowGap={1}>
@@ -387,13 +437,6 @@ const prefs = atom({ plugin: 'standup-board', key: 'prefs' } as const, {
   env: ALL,
   showEmpty: false,
 })
-
-const COLOR: Record<ColumnId, string> = {
-  running: 'success',
-  waiting: 'warning',
-  review: 'suggestion',
-  done: 'inactive',
-}
 
 type Cached<T> = { mtimeMs: number; size: number; value: T | undefined }
 

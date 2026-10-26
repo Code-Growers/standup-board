@@ -2,6 +2,7 @@ import { describe, expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
+import { PALETTE } from '../hooks/art'
 import { fixtureFiles } from './fixtures'
 import { SESSIONS, NOW, paneProps, world } from './harness'
 import type { WorldOptions } from './harness'
@@ -23,7 +24,7 @@ const openBoard = async ($: Engine, on: On, options: WorldOptions = {}) => {
   return w
 }
 
-const mount = ($: Engine, surface: (typeof SURFACES)[number], columns: number) =>
+const mount = ($: Engine, surface: 'desktop' | 'terminal' | 'mobile', columns: number) =>
   $.ui.mount({
     plugin: 'standup-board',
     surface,
@@ -34,8 +35,8 @@ const mount = ($: Engine, surface: (typeof SURFACES)[number], columns: number) =
   })
 
 const headers = async (ui: Awaited<ReturnType<typeof mount>>) =>
-  (await ui.findAll({ type: 'Text', text: /^(Running|Waiting for you|In review|Done) \(\d+\)$/ })).map(
-    found => found.text,
+  (await ui.findAll({ type: 'Text', text: /^● (Running|Waiting for you|In review|Done) \(\d+\)$/ })).map(
+    found => found.text.replace(/^● /, ''),
   )
 
 describe('board pane', () => {
@@ -55,7 +56,12 @@ describe('board pane', () => {
       expect((await ui.find({ type: 'Text', text: 'api · needs permission' }))).toBeDefined()
       expect((await ui.find({ type: 'Text', text: '4m ago' }))).toBeDefined()
       expect((await ui.find({ type: 'Text', text: /web · gone quiet/ }))).toBeDefined()
-      expect((await ui.find({ type: 'Text', text: /5 active/ }))).toBeDefined()
+      if (surface === 'terminal') {
+        expect(await ui.find({ type: 'Text', text: /5 active/ })).toBeDefined()
+      } else {
+        const alts = (await ui.findAll({ type: 'Svg' })).map(found => found.props.alt)
+        expect(alts).toContain('5 active, 2 waiting for you')
+      }
       await ui.unmount()
     })
 
@@ -79,15 +85,15 @@ describe('board pane', () => {
       const w = await openBoard($, on)
       const ui = await mount($, surface, WIDE)
       const current = await ui.find({ type: 'Text', text: 'All' })
-      expect(current?.props).toMatchObject({ bold: true, underline: true, color: 'claude' })
+      expect(current?.props).toMatchObject({ bold: true, underline: true, color: PALETTE.accent })
       expect(await ui.find({ key: 'env:0' })).toBe(undefined)
       expect((await ui.find({ key: 'env:1' }))?.props).toMatchObject({ label: 'api', plain: true })
       expect((await ui.find({ key: 'env:2' }))?.props.label).toBe('web')
       expect(await ui.find({ key: 'env:3' })).toBe(undefined)
       const counts = await ui.findAll({ type: 'Text', text: /^\d+$/ })
       expect(counts.map(found => [found.text, found.props.color])).toEqual([
-        ['2', 'warning'],
-        ['2', 'warning'],
+        ['2', PALETTE.waiting],
+        ['2', PALETTE.waiting],
       ])
 
       await ui.press({ key: 'env:1' })
@@ -144,6 +150,42 @@ describe('board pane', () => {
       await ui.unmount()
     })
   }
+
+  test('desktop: each card shows its buddy, glowing in its column colour', async ($, on) => {
+    await openBoard($, on)
+    const ui = await mount($, 'desktop', WIDE)
+    const pictures = await ui.findAll({ type: 'Svg' })
+    const alts = pictures.map(found => String(found.props.alt))
+    expect(alts).toContain('running')
+    expect(alts).toContain('needs permission')
+    expect(alts).toContain('gone quiet')
+    expect(alts.some(alt => /active, \d+ waiting for you/.test(alt))).toBe(true)
+    const working = pictures.find(found => found.props.alt === 'running')
+    expect(working?.props.isInteractive).toBe(true)
+    expect(String(working?.props.source)).toContain('animateTransform')
+    const asleep = pictures.find(found => found.props.alt === 'gone quiet')
+    expect(asleep?.props.isInteractive).toBe(undefined)
+    expect((await ui.find({ type: 'Box', key: 'box:a2' }))?.props.borderColor).toBe(PALETTE.waiting)
+    await ui.unmount()
+  })
+
+  test('terminal: glyphs stand in for the pictures', async ($, on) => {
+    await openBoard($, on)
+    const ui = await mount($, 'terminal', WIDE)
+    expect(await ui.find({ type: 'Svg' })).toBe(undefined)
+    expect(await ui.find({ type: 'Text', text: '⚿' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: '✻' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /5 active/ })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('mobile: the board draws with pictures and no input elements', async ($, on) => {
+    await openBoard($, on)
+    const ui = await mount($, 'mobile', NARROW)
+    expect((await ui.findAll({ type: 'Svg' })).length).toBeGreaterThan(0)
+    expect((await headers(ui))[0]).toBe('Running (2)')
+    await ui.unmount()
+  })
 
   test('desktop: the board picks up a new session on the next poll', async ($, on) => {
     const w = await openBoard($, on)
