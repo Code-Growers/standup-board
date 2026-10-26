@@ -271,19 +271,21 @@ export const register: Register = on => {
     return (
       <Box flexDirection="column" rowGap={1} width={columns}>
         {Svg ? (
-          <Svg
-            source={rings(
-              result.columns.map(entry => ({
-                label: entry.id === 'waiting' ? 'WAITING' : entry.title.toUpperCase(),
-                count: entry.cards.length,
-                color: PALETTE[entry.id],
-              })),
-              result.columns.reduce((sum, entry) => sum + entry.cards.length, 0),
-            )}
-            alt={`${result.total.active} active, ${result.total.waiting} waiting for you`}
-            width={288}
-            height={80}
-          />
+          <Box key="gauges" flexDirection="row" alignSelf="flex-start">
+            <Svg
+              source={rings(
+                result.columns.map(entry => ({
+                  label: entry.id === 'waiting' ? 'WAITING' : entry.title.toUpperCase(),
+                  count: entry.cards.length,
+                  color: PALETTE[entry.id],
+                })),
+                result.columns.reduce((sum, entry) => sum + entry.cards.length, 0),
+              )}
+              alt={`${result.total.active} active, ${result.total.waiting} waiting for you`}
+              width={288}
+              height={74}
+            />
+          </Box>
         ) : (
           <Text key="summary">
             <Text color={PALETTE.running}>{result.total.active} active</Text>
