@@ -52,10 +52,10 @@ describe('board pane', () => {
       ])
       const running = await ui.find({ type: 'Box', key: 'col:running' })
       expect(running?.props.width).toBe(Math.floor((WIDE - 3) / 4))
-      expect((await ui.find({ key: 'card:a2' }))?.text).toContain('Add rate limiting')
-      expect((await ui.find({ type: 'Text', text: 'api · needs permission' }))).toBeDefined()
-      expect((await ui.find({ type: 'Text', text: '4m ago' }))).toBeDefined()
-      expect((await ui.find({ type: 'Text', text: /web · gone quiet/ }))).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: 'Add rate limiting' })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: 'needs permission · 4m ago' })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /gone quiet · 20m ago/ })).toBeDefined()
+      expect((await ui.find({ key: 'copy:a2' }))?.props.label).toBe('⧉ Copy resume')
       if (surface === 'terminal') {
         expect(await ui.find({ type: 'Text', text: /5 active/ })).toBeDefined()
       } else {
@@ -85,13 +85,13 @@ describe('board pane', () => {
       const w = await openBoard($, on)
       const ui = await mount($, surface, WIDE)
       const current = await ui.find({ type: 'Text', text: 'All' })
-      expect(current?.props).toMatchObject({ bold: true, underline: true, color: PALETTE.accent })
+      expect(current?.props).toMatchObject({ bold: true, backgroundColor: PALETTE.accent })
       expect(await ui.find({ key: 'env:0' })).toBe(undefined)
       expect((await ui.find({ key: 'env:1' }))?.props).toMatchObject({ label: 'api', plain: true })
       expect((await ui.find({ key: 'env:2' }))?.props.label).toBe('web')
       expect(await ui.find({ key: 'env:3' })).toBe(undefined)
-      const counts = await ui.findAll({ type: 'Text', text: /^\d+$/ })
-      expect(counts.map(found => [found.text, found.props.color])).toEqual([
+      const counts = await ui.findAll({ type: 'Text', text: /^ \d+ $/ })
+      expect(counts.map(found => [found.text.trim(), found.props.backgroundColor])).toEqual([
         ['2', PALETTE.waiting],
         ['2', PALETTE.waiting],
       ])
@@ -106,14 +106,18 @@ describe('board pane', () => {
         'In review (0)',
         'Done (0)',
       ])
-      expect(w.store.get('prefs')).toEqual({ env: '/Users/tester/code/api', showEmpty: false })
+      expect(w.store.get('prefs')).toEqual({
+        env: '/Users/tester/code/api',
+        showEmpty: false,
+        showAllProjects: false,
+      })
       await ui.unmount()
     })
 
     test(`${surface}: the toggle shows environments with no active sessions`, async ($, on) => {
       await openBoard($, on)
       const ui = await mount($, surface, WIDE)
-      expect((await ui.find({ key: 'toggle-empty' }))?.text).toContain('Show 1 environment')
+      expect((await ui.find({ key: 'toggle-empty' }))?.text).toContain('Show 1 idle project')
       await ui.press({ key: 'toggle-empty' })
       expect((await ui.find({ key: 'env:3' }))?.props.label).toBe('infra')
       expect((await ui.find({ key: 'toggle-empty' }))?.text).toContain('Hide')
@@ -141,7 +145,7 @@ describe('board pane', () => {
     test(`${surface}: a card press copies its resume command`, async ($, on) => {
       const w = await openBoard($, on, { isClipboard: surface === 'terminal' })
       const ui = await mount($, surface, WIDE)
-      await ui.press({ key: 'card:a2' })
+      await ui.press({ key: 'copy:a2' })
       expect(w.copies).toEqual(['cd /Users/tester/code/api && claude --resume a2'])
       // A remote surface has no clipboard path yet: pbcopy stands in.
       expect(w.runs).toEqual(surface === 'desktop' ? [['pbcopy']] : [])
@@ -150,6 +154,44 @@ describe('board pane', () => {
       await ui.unmount()
     })
   }
+
+  test('desktop: many projects collapse behind "+N more", the current one kept in view', async ($, on) => {
+    const files = fixtureFiles()
+    for (let i = 0; i < 12; i += 1) {
+      const record = {
+        version: 1,
+        id: `p${i}`,
+        title: `Project ${i} work`,
+        groupKey: `/Users/tester/code/project-${String(i).padStart(2, '0')}`,
+        cwd: `/Users/tester/code/project-${String(i).padStart(2, '0')}`,
+        status: 'running',
+        startedAt: NOW,
+        lastActivityAt: NOW,
+        heartbeatAt: NOW,
+      }
+      files[`${SESSIONS}/p${i}.json`] = JSON.stringify(record)
+    }
+    const w = await openBoard($, on, { files })
+    const ui = await mount($, 'desktop', WIDE)
+    expect((await ui.findAll({ type: 'Button' })).filter(found => found.key?.startsWith('env:')).length).toBe(8)
+    expect((await ui.find({ key: 'more-projects' }))?.props.label).toBe('+6 more')
+
+    await ui.press({ key: 'more-projects' })
+    expect((await ui.find({ key: 'more-projects' }))?.props.label).toBe('Fewer')
+    expect((await ui.findAll({ type: 'Button' })).filter(found => found.key?.startsWith('env:')).length).toBe(14)
+    await ui.press({ key: 'env:13' })
+    await ui.press({ key: 'more-projects' })
+    expect((await ui.find({ key: 'more-projects' }))?.props.label).toBe('+5 more')
+    expect(w.store.get('prefs')).toMatchObject({ showAllProjects: false })
+    await ui.unmount()
+  })
+
+  test('desktop: the review action sits on its own row with space above it', async ($, on) => {
+    await openBoard($, on)
+    const ui = await mount($, 'desktop', WIDE)
+    expect((await ui.find({ type: 'Box', key: 'actions:a1' }))?.props.marginTop).toBe(1)
+    await ui.unmount()
+  })
 
   test('desktop: each card shows its buddy, glowing in its column colour', async ($, on) => {
     await openBoard($, on)
@@ -203,7 +245,7 @@ describe('board pane', () => {
     }
     w.files.set(`${SESSIONS}/n1.json`, JSON.stringify(fresh))
     await w.clock.advance(2_000)
-    expect((await ui.find({ key: 'card:n1' }))?.text).toContain('Brand new work')
+    expect(await ui.find({ type: 'Text', text: 'Brand new work' })).toBeDefined()
     expect((await headers(ui))[0]).toBe('Running (3)')
     await ui.unmount()
   })

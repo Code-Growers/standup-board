@@ -162,7 +162,7 @@ export const register: Register = on => {
           paddingX={1}
           width={columnWidth}
         >
-          <Box flexDirection="row" columnGap={1}>
+          <Box flexDirection="row" columnGap={1} alignItems="center">
             {Svg ? (
               <Svg
                 source={buddy(mood)}
@@ -177,17 +177,12 @@ export const register: Register = on => {
               </Text>
             )}
             <Box flexDirection="column" flexGrow={1}>
-              <Button
-                key={`card:${record.id}`}
-                plain
-                label={clip(titleOf(record), inner)}
-                onPress={press => copyResume($, record, press.surface)}
-              />
+              <Text bold>{clip(titleOf(record), inner)}</Text>
+              <Text dimColor>{clip(item.envLabel, inner)}</Text>
               <Text>
-                <Text dimColor>{clip(item.envLabel, Math.max(4, inner - 20))} · </Text>
                 <Text color={color}>{statusText(item, time)}</Text>
+                <Text dimColor> · {ago(record.lastActivityAt, time)}</Text>
               </Text>
-              <Text dimColor>{clip(ago(record.lastActivityAt, time), inner)}</Text>
             </Box>
           </Box>
           {Svg && progress !== undefined && (
@@ -198,35 +193,79 @@ export const register: Register = on => {
               isInteractive={progress === 'busy' || undefined}
             />
           )}
-          <Button
-            key={`review:${record.id}`}
-            plain
-            dimColor
-            label={item.isReview ? '↩ Out of review' : '→ Move to review'}
-            onPress={() => toggleReview($, record.id)}
-          />
+          <Box
+            key={`actions:${record.id}`}
+            flexDirection="row"
+            flexWrap="wrap"
+            columnGap={2}
+            marginTop={1}
+          >
+            <Button
+              key={`copy:${record.id}`}
+              plain
+              dimColor
+              label="⧉ Copy resume"
+              onPress={press => copyResume($, record, press.surface)}
+            />
+            <Button
+              key={`review:${record.id}`}
+              plain
+              dimColor
+              label={item.isReview ? '↩ Out of review' : '→ Review'}
+              onPress={() => toggleReview($, record.id)}
+            />
+          </Box>
         </Box>
       )
     }
 
-    const tabs = () => (
-      <Box flexDirection="row" flexWrap="wrap" columnGap={3}>
-        {[{ key: ALL, label: 'All', waiting: result.total.waiting }, ...result.environments].map(
-          (tab, index) => (
-            <Box key={`tab:${index}`} flexDirection="row" columnGap={1}>
+    const tabs = () => {
+      const all = [{ key: ALL, label: 'All', waiting: result.total.waiting }, ...result.environments]
+      const limit = (isWide ? MAX_TABS_WIDE : MAX_TABS_NARROW) + 1
+      // The current project stays in view even when it sorts past the limit.
+      const shown = all
+        .map((tab, index) => ({ ...tab, index }))
+        .filter(tab => view.showAllProjects || tab.index < limit || tab.key === result.env)
+      const hidden = all.length - shown.length
+
+      return (
+        <Box flexDirection="row" flexWrap="wrap" columnGap={2} alignItems="center">
+          {shown.map(tab => (
+            <Box key={`tab:${tab.index}`} flexDirection="row" columnGap={1}>
               {tab.key === result.env ? (
-                <Text bold underline color={PALETTE.accent}>
-                  {tab.label}
+                <Text bold color={INK} backgroundColor={PALETTE.accent}>
+                  {` ${tab.label} `}
                 </Text>
               ) : (
-                <Button key={`env:${index}`} plain dimColor label={tab.label} onPress={() => setEnv(tab.key)} />
+                <Button
+                  key={`env:${tab.index}`}
+                  plain
+                  dimColor
+                  label={tab.label}
+                  onPress={() => setEnv(tab.key)}
+                />
               )}
-              {tab.waiting > 0 && <Text color={PALETTE.waiting}>{tab.waiting}</Text>}
+              {tab.waiting > 0 && (
+                <Text bold color={INK} backgroundColor={PALETTE.waiting}>
+                  {` ${tab.waiting} `}
+                </Text>
+              )}
             </Box>
-          ),
-        )}
-      </Box>
-    )
+          ))}
+          {(hidden > 0 || (view.showAllProjects && all.length > limit)) && (
+            <Button
+              key="more-projects"
+              plain
+              label={view.showAllProjects ? 'Fewer' : `+${hidden} more`}
+              onPress={() =>
+                savePrefs($, value => ({ ...value, showAllProjects: !value.showAllProjects }))
+              }
+            />
+          )}
+          {toggle()}
+        </Box>
+      )
+    }
 
     const toggle = () =>
       (result.hiddenEnvironments > 0 || view.showEmpty) && (
@@ -236,8 +275,8 @@ export const register: Register = on => {
           dimColor
           label={
             view.showEmpty
-              ? 'Hide environments with no active sessions'
-              : `Show ${result.hiddenEnvironments} environment${result.hiddenEnvironments === 1 ? '' : 's'} with no active sessions`
+              ? 'Hide idle projects'
+              : `Show ${result.hiddenEnvironments} idle project${result.hiddenEnvironments === 1 ? '' : 's'}`
           }
           onPress={() => savePrefs($, value => ({ ...value, showEmpty: !value.showEmpty }))}
         />
@@ -294,7 +333,6 @@ export const register: Register = on => {
           </Text>
         )}
         {tabs()}
-        {toggle()}
         <Box flexDirection={isWide ? 'row' : 'column'} columnGap={gap} rowGap={1}>
           {result.columns.map(column)}
         </Box>
@@ -431,6 +469,11 @@ const POLL_MS = 2_000
 const CLOCK_STEP_MS = 30_000
 /** Below this many columns the board stacks its columns instead of setting them side by side. */
 const WIDE_COLUMNS = 88
+/** Project tabs shown before "+N more", besides All. */
+const MAX_TABS_WIDE = 8
+const MAX_TABS_NARROW = 4
+/** Text on a coloured pill. */
+const INK = '#16171a'
 
 const sessions = atom({ plugin: 'standup-board', key: 'sessions' } as const, [])
 const overrides = atom({ plugin: 'standup-board', key: 'overrides' } as const, {})
@@ -438,6 +481,7 @@ const now = atom({ plugin: 'standup-board', key: 'now' } as const, 0)
 const prefs = atom({ plugin: 'standup-board', key: 'prefs' } as const, {
   env: ALL,
   showEmpty: false,
+  showAllProjects: false,
 })
 
 type Cached<T> = { mtimeMs: number; size: number; value: T | undefined }
@@ -564,6 +608,7 @@ async function startBoard($: EngineInterface): Promise<void> {
     await update($, prefs, () => ({
       env: typeof saved.env === 'string' ? saved.env : ALL,
       showEmpty: saved.showEmpty === true,
+      showAllProjects: saved.showAllProjects === true,
     }))
   }
   // A hot reload keeps the pane up but drops the timer: start it again.

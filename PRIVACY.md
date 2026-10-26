@@ -7,7 +7,7 @@ standup-board collects no data and sends nothing off your machine.
   JSON file per Claude Code session (title, folder, git repository root,
   status, timestamps) and the In review flags you set.
 - The only program it runs is `pbcopy`, to put a session's resume command on
-  your clipboard when you press a card.
+  your clipboard when you press ⧉ Copy resume on a card.
 
 Deleting `~/.claude/standup/` removes everything it stored. Questions:
 [open an issue](https://github.com/Code-Growers/standup-board/issues).

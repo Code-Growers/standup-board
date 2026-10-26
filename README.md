@@ -21,69 +21,74 @@ stands in for the buddy:
 ```text
 5 active · 2 waiting for you
 
-All 2   api 2   web
-───
-
-Show 1 environment with no active sessions
+ All  2   api  2   web   Show 1 idle project
 
 ● Running (2)
 ╭──────────────────────────────────────╮
 │ ✻ Redesign the settings page         │
-│   web · running                      │
-│   just now                           │
-│ → Move to review                     │
+│   web                                │
+│   running · just now                 │
+│                                      │
+│ ⧉ Copy resume  → Review              │
 ╰──────────────────────────────────────╯
 
 ╭──────────────────────────────────────╮
 │ ✻ Fix OAuth token refresh            │
-│   api · running                      │
-│   1m ago                             │
-│ → Move to review                     │
+│   api                                │
+│   running · 1m ago                   │
+│                                      │
+│ ⧉ Copy resume  → Review              │
 ╰──────────────────────────────────────╯
 
 ● Waiting for you (2)
 ╭──────────────────────────────────────╮
 │ ⚿ Add rate limiting to /v2/search    │
-│   api · needs permission             │
-│   4m ago                             │
-│ → Move to review                     │
+│   api                                │
+│   needs permission · 4m ago          │
+│                                      │
+│ ⧉ Copy resume  → Review              │
 ╰──────────────────────────────────────╯
 
 ╭──────────────────────────────────────╮
 │ ! Write migration for the invoices … │
-│   api · needs your reply             │
-│   22m ago                            │
-│ → Move to review                     │
+│   api                                │
+│   needs your reply · 22m ago         │
+│                                      │
+│ ⧉ Copy resume  → Review              │
 ╰──────────────────────────────────────╯
 
 ● In review (1)
 ╭──────────────────────────────────────╮
 │ ◎ Upgrade to React 19                │
-│   web · needs your reply             │
-│   2h ago                             │
-│ ↩ Out of review                      │
+│   web                                │
+│   needs your reply · 2h ago          │
+│                                      │
+│ ⧉ Copy resume  ↩ Out of review       │
 ╰──────────────────────────────────────╯
 
 ● Done (3)
 ╭──────────────────────────────────────╮
 │ z Investigate the memory leak        │
-│   web · gone quiet                   │
-│   20m ago                            │
-│ → Move to review                     │
+│   web                                │
+│   gone quiet · 20m ago               │
+│                                      │
+│ ⧉ Copy resume  → Review              │
 ╰──────────────────────────────────────╯
 
 ╭──────────────────────────────────────╮
 │ z Fix the flaky checkout e2e test    │
-│   web · ended                        │
-│   3h ago                             │
-│ → Move to review                     │
+│   web                                │
+│   ended · 3h ago                     │
+│                                      │
+│ ⧉ Copy resume  → Review              │
 ╰──────────────────────────────────────╯
 
 ╭──────────────────────────────────────╮
 │ z Rotate the staging certificates    │
-│   infra · ended                      │
-│   5h ago                             │
-│ → Move to review                     │
+│   infra                              │
+│   ended · 5h ago                     │
+│                                      │
+│ ⧉ Copy resume  → Review              │
 ╰──────────────────────────────────────╯
 ```
 
@@ -101,10 +106,10 @@ sessions on other computers never write there, so they don't show up.
 | --- | --- |
 | **Running** | Automatic: a turn is in progress. |
 | **Waiting for you** | Automatic: the turn finished and needs your reply, or the session is on a permission prompt, a question, or an input form. A new session waits here until its first prompt. |
-| **In review** | Manual: press **→ Move to review** on a card. **↩ Out of review** sends it back to its automatic column. |
+| **In review** | Manual: press **→ Review** on a card. **↩ Out of review** sends it back to its automatic column. |
 | **Done** | Automatic: the session ended, or it has written nothing for 5 minutes (a crash or a force-quit). Done cards drop off the board after 24 hours. |
 
-Each card shows the session title, its environment, its status (for example
+Each card shows the session title, its project, its status (for example
 "needs permission" or "needs your reply") and the time since its last activity.
 
 | Buddy (desktop) | Glyph (terminal) | Means |
@@ -117,22 +122,25 @@ Each card shows the session title, its environment, its status (for example
 
 The buddy is this plugin's own character, not Anthropic's logo or mascot.
 
-**Environments.** Mods can't read the desktop app's environment names, so
+**Projects.** Mods can't read the desktop app's environment names, so
 sessions are grouped by **git repository**. A worktree session groups with its
 main checkout. A folder that isn't a git repository groups by itself. Each
 group is labelled with its folder name, plus the parent folder when two names
 clash.
 
-- The tabs at the top switch between **All** and one board per environment.
-  The current one is bold and underlined, and the amber number beside a tab is
-  how many sessions there are waiting for you.
-- Environments with no active session are hidden. The link under the tabs
-  shows them.
-- The board remembers the environment you viewed last.
+- The tabs at the top switch between **All** and one board per project. The
+  current one is an orange pill, and the amber pill beside a tab is how many
+  sessions there are waiting for you.
+- Projects that need you most come first. After 8 tabs (4 in a narrow pane)
+  the rest fold into **+N more**; the project you're viewing always stays in
+  sight.
+- Projects with no active session are hidden; **Show N idle projects** at the
+  end of the tabs shows them.
+- The board remembers the project you viewed last.
 - In a narrow pane the tabs wrap onto more lines and the columns stack.
 
-**Opening a session.** A mod can't open or focus another session, so pressing
-a card copies `cd <folder> && claude --resume <id>` to your clipboard. Paste it
+**Opening a session.** A mod can't open or focus another session, so a card's
+**⧉ Copy resume** copies `cd <folder> && claude --resume <id>` to your clipboard. Paste it
 in a terminal, or find the session by its title in the desktop sidebar. On the desktop the copy goes through macOS `pbcopy`, because the
 desktop app doesn't expose its clipboard to mods yet.
 
@@ -188,7 +196,7 @@ Type `/standup` to open the board. It refreshes every 2 seconds while open.
   writes there.
 - The board reads both folders and rereads only the files that changed. If it
   catches a file mid-write, it keeps the last good copy.
-- Your view (last environment, show-empty toggle) is kept in the mod's own
+- Your view (last project, the idle-projects and +N more toggles) is kept in the mod's own
   store.
 
 ## What it reads, writes, runs and sends
@@ -213,7 +221,7 @@ runs or obeys them.
 - The environment variables `HOME` and `USERPROFILE` (to find `~/.claude`) and
   `CLAUDE_CODE_HOST_SESSION_ID` (the desktop app's id for the session).
 
-**Runs.** One program: `pbcopy` (macOS), only when you press a card. It gets
+**Runs.** One program: `pbcopy` (macOS), only when you press **⧉ Copy resume** on a card. It gets
 the session's resume command (`cd <folder> && claude --resume <id>`) on its
 standard input and puts it on your clipboard. The desktop app doesn't give
 plugins a clipboard yet, so this is how the copy works there. Where the

@@ -44,6 +44,8 @@ export type Prefs = {
   /** The environment (group key) last viewed; `all` for every one. */
   env: string
   showEmpty: boolean
+  /** Every project tab, or only the first few and a "+N more". */
+  showAllProjects: boolean
 }
 
 declare module 'claude-code' {

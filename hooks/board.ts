@@ -112,7 +112,7 @@ export const buildBoard = (input: {
   }
   const every = [...byKey.values()].sort(
     (a, b) =>
-      Number(b.active > 0) - Number(a.active > 0) || a.label.localeCompare(b.label),
+      b.waiting - a.waiting || b.active - a.active || a.label.localeCompare(b.label),
   )
   const environments = input.showEmpty ? every : every.filter(env => env.active > 0)
   const env = environments.some(e => e.key === input.env) ? input.env : ALL
