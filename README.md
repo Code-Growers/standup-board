@@ -21,7 +21,7 @@ stands in for the buddy:
 ```text
 5 active · 2 waiting for you
 
-▸ All 2   api 2   web     Show 1 idle project
+[ All 2 ] [ api 2 ] [ web ]   Show 1 idle project
 
 ● Running (2)
 ╭──────────────────────────────────────╮
@@ -128,9 +128,9 @@ main checkout. A folder that isn't a git repository groups by itself. Each
 group is labelled with its folder name, plus the parent folder when two names
 clash.
 
-- The tabs at the top switch between **All** and one board per project. The
-  current one is bold, underlined and orange, and the amber number in a tab is
-  how many sessions there are waiting for you.
+- The buttons at the top switch between **All** and one board per project. The
+  current one is orange, and the amber badge in a button is how many sessions
+  there are waiting for you.
 - Projects that need you most come first; the tabs wrap onto more lines when
   there are many.
 - Projects with no active session are hidden; **Show N idle projects**, at the
@@ -138,8 +138,8 @@ clash.
 - The board remembers the project you viewed last.
 - In a narrow pane the tabs wrap onto more lines and the columns stack.
 
-**Opening a session.** Press a card (or its **↗ Open**) to open that session in
-the Claude desktop app. The board asks the operating system to open the
+**Opening a session.** Press a card to open that session in the Claude desktop
+app (in the terminal, press its **↗ Open**). The board asks the operating system to open the
 desktop app's own link, `claude://code/continue?session=local_…`.
 
 A session started in a terminal has no desktop session, so pressing it copies

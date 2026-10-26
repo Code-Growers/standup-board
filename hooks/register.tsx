@@ -149,7 +149,8 @@ export const register: Register = on => {
       const { record } = item
       const mood = moodOf(item, time)
       const color = moodColor(mood)
-      const inner = Math.max(8, columnWidth - 4 - (Svg ? 7 : 2))
+      // Two cells to spare: the desktop's proportional font runs wider than a cell.
+      const inner = Math.max(8, columnWidth - 6 - (Svg ? 7 : 2))
       const title = clip(titleOf(record), inner)
       const project = clip(item.envLabel, inner)
       const status = statusText(item, time)
@@ -192,18 +193,31 @@ export const register: Register = on => {
                 </Text>
               </Box>
             ) : (
-              <Button
-                key={`open:${record.id}`}
-                plain
-                onPress={press => openSession($, record, press.surface)}
-              >
-                <Text bold>{title}</Text>
-                {'\n'}
-                <Text dimColor>{project}</Text>
-                {'\n'}
-                <Text color={color}>{status}</Text>
-                <Text dimColor>{since}</Text>
-              </Button>
+              // A Button draws its children inline: one per line, all opening the session.
+              <Box flexDirection="column" flexGrow={1} flexShrink={1}>
+                <Button key={`open:${record.id}`} plain onPress={press => openSession($, record, press.surface)}>
+                  <Text bold wrap="truncate-end">
+                    {title}
+                  </Text>
+                </Button>
+                <Button
+                  key={`open-project:${record.id}`}
+                  plain
+                  onPress={press => openSession($, record, press.surface)}
+                >
+                  <Text dimColor wrap="truncate-end">
+                    {project}
+                  </Text>
+                </Button>
+                <Button
+                  key={`open-status:${record.id}`}
+                  plain
+                  onPress={press => openSession($, record, press.surface)}
+                >
+                  <Text color={color}>{status}</Text>
+                  <Text dimColor>{since}</Text>
+                </Button>
+              </Box>
             )}
           </Box>
           {Svg && progress !== undefined && (
@@ -221,7 +235,7 @@ export const register: Register = on => {
             columnGap={2}
             marginTop={1}
           >
-            {canOpen && (
+            {canOpen && !rich && (
               <Button
                 key={`go:${record.id}`}
                 plain
@@ -251,34 +265,31 @@ export const register: Register = on => {
 
     const tabs = () => (
       <Box flexDirection="row" columnGap={2} alignItems="flex-start">
-        <Box flexDirection="row" flexWrap="wrap" columnGap={2} flexGrow={1} flexShrink={1}>
+        <Box flexDirection="row" flexWrap="wrap" columnGap={1} rowGap={1} flexGrow={1} flexShrink={1}>
           {[{ key: ALL, label: 'All', waiting: result.total.waiting }, ...result.environments].map(
             (tab, index) => {
               const isCurrent = tab.key === result.env
               const count = tab.waiting > 0 ? ` ${tab.waiting}` : ''
 
               return rich ? (
-                <Button key={`env:${index}`} plain onPress={() => setEnv(tab.key)}>
-                  <Text
-                    bold={isCurrent}
-                    underline={isCurrent}
-                    color={isCurrent ? PALETTE.accent : undefined}
-                    dimColor={!isCurrent}
-                  >
-                    {tab.label}
-                  </Text>
+                <Button
+                  key={`env:${index}`}
+                  variant={isCurrent ? 'primary' : 'secondary'}
+                  onPress={() => setEnv(tab.key)}
+                >
+                  <Text bold={isCurrent}>{tab.label}</Text>
+                  {count && ' '}
                   {count && (
-                    <Text bold color={PALETTE.waiting}>
-                      {count}
+                    <Text bold color={PILL_INK} backgroundColor={PALETTE.waiting}>
+                      {` ${tab.waiting} `}
                     </Text>
                   )}
                 </Button>
               ) : (
                 <Button
                   key={`env:${index}`}
-                  plain
-                  dimColor={!isCurrent}
-                  label={`${isCurrent ? '▸ ' : ''}${tab.label}${count}`}
+                  variant={isCurrent ? 'primary' : 'secondary'}
+                  label={`${tab.label}${count}`}
                   onPress={() => setEnv(tab.key)}
                 />
               )
@@ -343,7 +354,7 @@ export const register: Register = on => {
                 result.columns.reduce((sum, entry) => sum + entry.cards.length, 0),
               )}
               alt={`${result.total.active} active, ${result.total.waiting} waiting for you`}
-              width={288}
+              width={276}
               height={74}
             />
           </Box>
@@ -491,6 +502,8 @@ const POLL_MS = 2_000
 const CLOCK_STEP_MS = 30_000
 /** Below this many columns the board stacks its columns instead of setting them side by side. */
 const WIDE_COLUMNS = 88
+/** Text on the amber count badge. */
+const PILL_INK = '#16171a'
 
 const sessions = atom({ plugin: 'standup-board', key: 'sessions' } as const, [])
 const overrides = atom({ plugin: 'standup-board', key: 'overrides' } as const, {})

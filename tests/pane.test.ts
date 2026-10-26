@@ -52,11 +52,10 @@ describe('board pane', () => {
       ])
       const running = await ui.find({ type: 'Box', key: 'col:running' })
       expect(running?.props.width).toBe(Math.floor((WIDE - 3) / 4))
-      const card = (await ui.find({ key: 'open:a2' }))?.text ?? ''
-      expect(card).toContain('Add rate limiting')
-      expect(card).toContain('needs permission')
-      expect(card).toContain('4m ago')
-      expect((await ui.find({ key: 'open:w4' }))?.text).toContain('gone quiet')
+      expect((await ui.find({ key: 'open:a2' }))?.text).toContain('Add rate limit')
+      expect((await ui.find({ key: 'open-project:a2' }))?.text).toBe('api')
+      expect((await ui.find({ key: 'open-status:a2' }))?.text).toBe('needs permission · 4m ago')
+      expect((await ui.find({ key: 'open-status:w4' }))?.text).toContain('gone quiet')
       expect((await ui.find({ key: 'copy:a2' }))?.props.label).toBe('⧉ Copy')
       if (surface === 'terminal') {
         expect(await ui.find({ type: 'Text', text: /5 active/ })).toBeDefined()
@@ -87,21 +86,16 @@ describe('board pane', () => {
       const w = await openBoard($, on)
       const ui = await mount($, surface, WIDE)
       const tabs = (await ui.findAll({ type: 'Button' })).filter(found => found.key?.startsWith('env:'))
-      expect(tabs.map(found => found.text)).toEqual(['All 2', 'api 2', 'web'])
-      expect((await ui.find({ type: 'Text', text: 'All' }))?.props).toMatchObject({
-        bold: true,
-        underline: true,
-        color: PALETTE.accent,
-      })
-      expect((await ui.find({ type: 'Text', text: 'web' }))?.props.dimColor).toBe(true)
-      const counts = await ui.findAll({ type: 'Text', text: /^ \d+$/ })
-      expect(counts.map(found => [found.text.trim(), found.props.color])).toEqual([
+      expect(tabs.map(found => found.text.replace(/\s+/g, ' ').trim())).toEqual(['All 2', 'api 2', 'web'])
+      expect(tabs.map(found => found.props.variant)).toEqual(['primary', 'secondary', 'secondary'])
+      const counts = await ui.findAll({ type: 'Text', text: /^ \d+ $/ })
+      expect(counts.map(found => [found.text.trim(), found.props.backgroundColor])).toEqual([
         ['2', PALETTE.waiting],
         ['2', PALETTE.waiting],
       ])
 
       await ui.press({ key: 'env:1' })
-      expect((await ui.find({ type: 'Text', text: 'api' }))?.props.bold).toBe(true)
+      expect((await ui.find({ key: 'env:1' }))?.props.variant).toBe('primary')
       expect(await headers(ui)).toEqual([
         'Running (1)',
         'Waiting for you (2)',
@@ -185,7 +179,10 @@ describe('board pane', () => {
     await ui.press({ key: 'open:a2' })
     expect(w.runs).toEqual([['open', 'claude://code/continue?session=local_a2-desk']])
     expect(w.toasts.at(-1)).toBe('Opening the session in Claude')
-    expect((await ui.find({ key: 'go:a2' }))?.props.label).toBe('↗ Open')
+    // The whole card opens it on the desktop, so there's no separate Open action.
+    expect(await ui.find({ key: 'go:a2' })).toBe(undefined)
+    await ui.press({ key: 'open-status:a2' })
+    expect(w.runs.length).toBe(2)
 
     // A session started in a terminal has no desktop id: its resume command is copied.
     await ui.press({ key: 'open:a1' })
@@ -197,7 +194,7 @@ describe('board pane', () => {
   test('desktop: an engine before 2.1.299 gets plain labels', async ($, on) => {
     await openBoard($, on, { version: '2.1.288' })
     const ui = await mount($, 'desktop', WIDE)
-    expect((await ui.find({ key: 'env:0' }))?.props.label).toBe('▸ All 2')
+    expect((await ui.find({ key: 'env:0' }))?.props).toMatchObject({ label: 'All 2', variant: 'primary' })
     expect((await ui.find({ key: 'env:1' }))?.props.label).toBe('api 2')
     expect(await ui.find({ key: 'open:a2' })).toBe(undefined)
     expect((await ui.find({ key: 'go:a2' }))?.props.label).toBe('↗ Open')

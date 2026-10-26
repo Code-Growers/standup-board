@@ -10,6 +10,7 @@ import {
   parseRecord,
   resumeCommand,
 } from '../hooks/board'
+import { rings } from '../hooks/art'
 import { FIXTURE_OVERRIDES, FIXTURE_SESSIONS } from './fixtures'
 import { NOW } from './harness'
 
@@ -104,5 +105,19 @@ describe('text', () => {
     expect(parseRecord('{"version":1,"id":"x"')).toBe(undefined)
     expect(parseRecord('{"id":"x"}')).toBe(undefined)
     expect(parseRecord(JSON.stringify(FIXTURE_SESSIONS[0]))?.id).toBe('a1')
+  })
+})
+
+describe('art', () => {
+  test('the first ring gauge starts at the left edge, lined up with the text below it', () => {
+    const svg = rings(
+      [
+        { label: 'RUNNING', count: 1, color: '#000' },
+        { label: 'DONE', count: 2, color: '#000' },
+      ],
+      3,
+    )
+    expect(svg).toContain('cx="30"')
+    expect(svg).toContain('width="132"')
   })
 })

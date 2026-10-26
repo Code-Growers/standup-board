@@ -154,11 +154,12 @@ export const rings = (gauges: readonly Gauge[], total: number): string => {
   const circumference = 2 * Math.PI * 24
   const parts = gauges.map((gauge, index) => {
     const share = total > 0 ? gauge.count / total : 0
-    const x = index * size + size / 2
+    // The first ring starts at the left edge, lined up with the text below it.
+    const x = index * size + 30
 
     return `<g><circle cx="${x}" cy="29" r="24" fill="none" stroke="${gauge.color}" stroke-opacity=".18" stroke-width="6"/><circle cx="${x}" cy="29" r="24" fill="none" stroke="${gauge.color}" stroke-width="6" stroke-linecap="round" stroke-dasharray="${(share * circumference).toFixed(1)} ${circumference.toFixed(1)}" transform="rotate(-90 ${x} 29)" filter="url(#glow-rings)"/><text x="${x}" y="35" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="17" font-weight="800" fill="${gauge.color}">${gauge.count}</text><text x="${x}" y="70" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="9.5" font-weight="700" letter-spacing=".08em" fill="${gauge.color}">${gauge.label}</text></g>`
   })
-  const width = gauges.length * size
+  const width = (gauges.length - 1) * size + 60
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} 74" width="${width}" height="74"><defs><filter id="glow-rings" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>${parts.join('')}</svg>`
 }
