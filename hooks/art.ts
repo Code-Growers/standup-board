@@ -161,5 +161,5 @@ export const rings = (gauges: readonly Gauge[], total: number): string => {
   })
   const width = (gauges.length - 1) * size + 60
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} 74" width="${width}" height="74"><defs><filter id="glow-rings" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>${parts.join('')}</svg>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} 78" width="${width}" height="78"><defs><filter id="glow-rings" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>${parts.join('')}</svg>`
 }

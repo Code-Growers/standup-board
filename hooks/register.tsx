@@ -355,7 +355,7 @@ export const register: Register = on => {
               )}
               alt={`${result.total.active} active, ${result.total.waiting} waiting for you`}
               width={276}
-              height={74}
+              height={78}
             />
           </Box>
         ) : (
