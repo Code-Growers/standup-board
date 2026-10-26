@@ -22,6 +22,7 @@ describe('tracker', () => {
       groupKey: '/Users/tester/code/api',
       cwd: '/Users/tester/code/api',
       hostSessionId: 'local_abc',
+      plugin: '0.2.0',
       status: 'waiting',
       reason: 'new',
       heartbeatAt: NOW,

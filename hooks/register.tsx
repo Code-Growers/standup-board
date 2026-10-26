@@ -396,6 +396,8 @@ async function overridesDir($: EngineInterface): Promise<string> {
 
 const fileName = (id: string): string => `${id.replace(/[^\w-]/g, '')}.json`
 
+/** This build, as plugin.json names it; each session records the one it runs. */
+const PLUGIN_VERSION = '0.2.0'
 const HEARTBEAT_MS = 60_000
 /** Activity alone (no status change) is written at most this often. */
 const ACTIVITY_WRITE_MS = 15_000
@@ -433,6 +435,7 @@ async function load($: EngineInterface): Promise<SessionRecord> {
     title: saved?.title || clip(firstPrompt ?? '', 80),
     groupKey: repo?.root ?? (await $.session.root()),
     cwd,
+    plugin: PLUGIN_VERSION,
     ...(hostSessionId ? { hostSessionId } : {}),
     status: isLive ? saved.status : 'waiting',
     reason: isLive ? saved.reason : history.length > 0 ? 'reply' : 'new',
@@ -659,7 +662,12 @@ async function openSession($: EngineInterface, record: SessionRecord, surface: R
     for (const argv of commands) {
       const run = await $.process.run(argv, { timeoutMs: 5_000 }).catch(() => undefined)
       if (run?.exitCode === 0) {
-        $.ui.toast('Opening the session in Claude')
+        // A session on an older build has no handoff watcher, so its board won't open.
+        $.ui.toast(
+          record.plugin === PLUGIN_VERSION
+            ? 'Opening the session in Claude'
+            : 'Opening the session in Claude. It runs an older Standup Board: run /reload-plugins there to keep the board when you jump.',
+        )
         return
       }
     }

@@ -209,6 +209,28 @@ describe('board pane', () => {
     await ui.unmount()
   })
 
+  test('opening a session on an older build says to reload the plugin there', async ($, on) => {
+    const files = fixtureFiles()
+    files[`${SESSIONS}/old.json`] = JSON.stringify({
+      version: 1,
+      id: 'old1',
+      title: 'Old build session',
+      groupKey: '/Users/tester/code/api',
+      cwd: '/Users/tester/code/api',
+      hostSessionId: 'local_old-build',
+      status: 'running',
+      startedAt: NOW,
+      lastActivityAt: NOW,
+      heartbeatAt: NOW,
+    })
+    const w = await openBoard($, on, { files })
+    const ui = await mount($, 'desktop', WIDE)
+    await ui.press({ key: 'open:old1' })
+    expect(w.runs).toEqual([['open', 'claude://code/continue?session=local_old-build']])
+    expect(w.toasts.at(-1)).toContain('run /reload-plugins there')
+    await ui.unmount()
+  })
+
   test('a session opens the board when a handoff names it, and ignores others', async ($, on) => {
     const handoff = (hostSessionId: string, at: number) => ({
       [`${HOME}/.claude/standup/handoff.json`]: JSON.stringify({ hostSessionId, at }),

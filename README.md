@@ -179,6 +179,11 @@ open appear after their next restart (or `/reload-plugins`).
 
 Type `/standup` to open the board. It refreshes every 2 seconds while open.
 
+After you install or update the plugin, each session that was already open
+keeps the build it loaded until you run `/reload-plugins` in it (or restart
+it). An older build still shows on the board, but it can't open its own board
+when you jump to it from another session; the board says so when you open one.
+
 ## How it works
 
 - Every session runs the tracker. It writes only its own record:
@@ -285,6 +290,10 @@ runs on 2.1.288 too, with plain labels. They cover:
 - the tracker's status changes
 - the pane on the desktop and terminal surfaces, at a wide width and at a
   narrow 40-column width
+
+A release raises `version` in `.claude-plugin/plugin.json` and
+`PLUGIN_VERSION` in `hooks/register.tsx` together: each session records the
+build it runs, and the board compares them.
 
 To try local changes, start a session with
 `claude --plugin-dir /path/to/standup-board`. Edits reload when you save.

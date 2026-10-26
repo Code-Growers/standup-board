@@ -21,6 +21,8 @@ export type SessionRecord = {
   /** The git repo root (main checkout for a worktree), else the project root. */
   groupKey: string
   cwd: string
+  /** The standup-board build the session runs; older builds wrote none. */
+  plugin?: string
   /** The desktop app's own id for the session (`local_…`), when it has one. */
   hostSessionId?: string
   status: SessionStatus
