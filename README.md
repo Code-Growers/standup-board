@@ -140,7 +140,9 @@ clash.
 
 **Opening a session.** Press a card to open that session in the Claude desktop
 app (in the terminal, press its **↗ Open**). The board asks the operating system to open the
-desktop app's own link, `claude://code/continue?session=local_…`.
+desktop app's own link, `claude://code/continue?session=local_…`. The board
+is a pane of the session you opened it in, so it hands itself over: the session
+you jump to opens its own board, and the one you left keeps its.
 
 A session started in a terminal has no desktop session, so pressing it copies
 `cd <folder> && claude --resume <id>` instead. **⧉ Copy** copies that
@@ -204,12 +206,15 @@ Type `/standup` to open the board. It refreshes every 2 seconds while open.
 
 ## What it reads, writes, runs and sends
 
-**Writes.** Only two kinds of small JSON files, both under `~/.claude/standup/`:
+**Writes.** Only small JSON files, all under `~/.claude/standup/`:
 
 - `sessions/<session-id>.json`: each session's own record (title, folder, git
   repository root, status, timestamps). Written by that session.
 - `overrides/<session-id>.json`: the **In review** flag, written by the board
   when you press a review button.
+- `handoff.json`: which session you just opened from the board (its desktop
+  id and the time), so that session opens its own board. Every session checks
+  this file's timestamp every 1.5 seconds.
 
 The file name comes from the session id, so the path can't be fixed text. These
 are not build, settings, start-up or instruction files: no other tool reads,
@@ -221,8 +226,9 @@ runs or obeys them.
 - The session's id, folder and git repository root.
 - The first prompt of the conversation, used as the card title when the
   session has no title of its own.
-- The environment variables `HOME` and `USERPROFILE` (to find `~/.claude`) and
-  `CLAUDE_CODE_HOST_SESSION_ID` (the desktop app's id for the session).
+- The environment variables `HOME` and `USERPROFILE` (to find `~/.claude`),
+  `CLAUDE_CODE_HOST_SESSION_ID` (the desktop app's id for the session) and `OS`
+  (to pick the command that opens a link on Windows).
 
 **Runs.** Only when you press something on a card:
 

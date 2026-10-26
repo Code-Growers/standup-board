@@ -10,6 +10,8 @@ export const NOW = Date.UTC(2026, 9, 19, 9, 30)
 
 export type World = {
   files: Map<string, string>
+  /** Writes a file as another process would: its modification time moves on. */
+  write: (path: string, text: string) => void
   toasts: string[]
   copies: string[]
   runs: string[][]
@@ -77,6 +79,13 @@ export const world = (on: On, options: WorldOptions = {}): World => {
   on('fs.read', ($, e) => {
     const text = files.get(e.path)
     return text === undefined ? { deny: `ENOENT: ${e.path}` } : { value: text }
+  })
+  on('fs.stat', ($, e) => {
+    const text = files.get(e.path)
+
+    return text === undefined
+      ? { deny: `ENOENT: ${e.path}` }
+      : { value: { kind: 'file' as const, size: text.length, mtimeMs: mtimes.get(e.path) ?? 0, isLink: false } }
   })
   on('fs.write', ($, e) => {
     files.set(e.path, e.text)
@@ -153,6 +162,10 @@ export const world = (on: On, options: WorldOptions = {}): World => {
 
   return {
     files,
+    write: (path, text) => {
+      files.set(path, text)
+      mtimes.set(path, tick++)
+    },
     toasts,
     copies,
     runs,

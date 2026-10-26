@@ -10,6 +10,7 @@ import {
   ago,
   buildBoard,
   clip,
+  fitMeta,
   parseOverride,
   parseRecord,
   resumeCommand,
@@ -152,13 +153,12 @@ export const register: Register = on => {
       // Two cells to spare: the desktop's proportional font runs wider than a cell.
       const inner = Math.max(8, columnWidth - 6 - (Svg ? 7 : 2))
       const title = clip(titleOf(record), inner)
-      const project = clip(item.envLabel, inner)
-      const status = statusText(item, time)
-      const since = ` · ${ago(record.lastActivityAt, time)}`
+      const meta = fitMeta(item.envLabel, statusText(item, time), ago(record.lastActivityAt, time), inner)
       const canOpen = record.hostSessionId !== undefined && HOST_SESSION.test(record.hostSessionId)
       const waited = (time - record.lastActivityAt) / 3_600_000
       const progress =
         mood === 'working' ? 'busy' : item.column === 'waiting' ? Math.min(1, waited) : undefined
+      const hasBar = Svg !== undefined && progress !== undefined
 
       return (
         <Box
@@ -186,10 +186,13 @@ export const register: Register = on => {
             {!rich ? (
               <Box flexDirection="column" flexGrow={1}>
                 <Text bold>{title}</Text>
-                <Text dimColor>{project}</Text>
+                <Text dimColor>
+                  {meta.project}
+                  {meta.projectTail}
+                </Text>
                 <Text>
-                  <Text color={color}>{status}</Text>
-                  <Text dimColor>{since}</Text>
+                  <Text color={color}>{meta.status}</Text>
+                  <Text dimColor>{meta.statusTail}</Text>
                 </Text>
               </Box>
             ) : (
@@ -206,7 +209,8 @@ export const register: Register = on => {
                   onPress={press => openSession($, record, press.surface)}
                 >
                   <Text dimColor wrap="truncate-end">
-                    {project}
+                    {meta.project}
+                    {meta.projectTail}
                   </Text>
                 </Button>
                 <Button
@@ -214,26 +218,28 @@ export const register: Register = on => {
                   plain
                   onPress={press => openSession($, record, press.surface)}
                 >
-                  <Text color={color}>{status}</Text>
-                  <Text dimColor>{since}</Text>
+                  <Text color={color}>{meta.status}</Text>
+                  {meta.statusTail && <Text dimColor>{meta.statusTail}</Text>}
                 </Button>
               </Box>
             )}
           </Box>
-          {Svg && progress !== undefined && (
-            <Svg
-              source={bar(color, progress)}
-              alt={progress === 'busy' ? 'Working' : `Waiting ${ago(record.lastActivityAt, time)}`}
-              height={6}
-              isInteractive={progress === 'busy' || undefined}
-            />
+          {hasBar && (
+            <Box key={`bar:${record.id}`} flexDirection="column" marginY={1}>
+              <Svg
+                source={bar(color, progress)}
+                alt={progress === 'busy' ? 'Working' : `Waiting ${ago(record.lastActivityAt, time)}`}
+                height={6}
+                isInteractive={progress === 'busy' || undefined}
+              />
+            </Box>
           )}
           <Box
             key={`actions:${record.id}`}
             flexDirection="row"
             flexWrap="wrap"
             columnGap={2}
-            marginTop={1}
+            marginTop={hasBar ? 0 : 1}
           >
             {canOpen && !rich && (
               <Button
@@ -646,6 +652,8 @@ async function openSession($: EngineInterface, record: SessionRecord, surface: R
   const id = record.hostSessionId
   if (id && HOST_SESSION.test(id)) {
     const url = `claude://code/continue?session=${id}`
+    // The board is a pane of this session: ask the one we jump to to open its own.
+    await $.fs.write(`${await stateDir($)}/handoff.json`, JSON.stringify({ hostSessionId: id, at: await $.clock.now() }))
     const isWindows = (await $.env.get('OS')) === 'Windows_NT'
     const commands = isWindows ? [['cmd', '/c', 'start', '', url]] : [['open', url], ['xdg-open', url]]
     for (const argv of commands) {
@@ -662,6 +670,28 @@ async function openSession($: EngineInterface, record: SessionRecord, surface: R
 const titleOf = (record: SessionRecord): string =>
   record.title || `New session in ${record.cwd.split(/[\\/]/).pop() || record.cwd}`
 
+/** How often a session looks for a board handed to it, and how long a handoff stays good. */
+const HANDOFF_POLL_MS = 1_500
+const HANDOFF_FRESH_MS = 15_000
+let handoffSeen = 0
+
+/** Opens the board here when another session's board just sent the person to this session. */
+async function followHandoff($: EngineInterface): Promise<void> {
+  const path = `${await stateDir($)}/handoff.json`
+  const stat = await $.fs.stat(path).catch(() => undefined)
+  if (!stat || stat.mtimeMs === handoffSeen) return
+  handoffSeen = stat.mtimeMs
+  const handoff = await $.fs
+    .read(path)
+    .then(text => JSON.parse(text) as { hostSessionId?: unknown; at?: unknown })
+    .catch(() => undefined)
+  const own = await $.env.get('CLAUDE_CODE_HOST_SESSION_ID')
+  const isFresh = typeof handoff?.at === 'number' && (await $.clock.now()) - handoff.at < HANDOFF_FRESH_MS
+  if (!own || handoff?.hostSessionId !== own || !isFresh) return
+  if ((await $.ui.panes()).some(pane => pane.id === PANE)) return
+  await openBoard($)
+}
+
 async function startBoard($: EngineInterface): Promise<void> {
   const saved = (await $.store.get('prefs')) as Partial<Prefs> | undefined
   if (saved) {
@@ -672,6 +702,7 @@ async function startBoard($: EngineInterface): Promise<void> {
   }
   // A hot reload keeps the pane up but drops the timer: start it again.
   if ((await $.ui.panes()).some(pane => pane.id === PANE)) await startPolling($)
+  $.clock.every(HANDOFF_POLL_MS, () => void followHandoff($))
   await $.command.register({
     name: 'standup',
     description: 'Open the standup board of every Claude Code session on this machine',

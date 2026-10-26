@@ -173,6 +173,28 @@ export const clip = (text: string, width: number): string => {
   return flat.length > width ? `${flat.slice(0, width - 1)}…` : flat
 }
 
+export type CardMeta = { project: string; projectTail: string; status: string; statusTail: string }
+
+/**
+ * Fits a card's project and status lines to `width`: the time goes after the
+ * status, or after the project when the status has no room for it, or is left
+ * out; a status too long for the line is cut.
+ */
+export const fitMeta = (project: string, status: string, since: string, width: number): CardMeta => {
+  const tail = ` · ${since.replace(/ ago$/, '')}`
+  if (status.length + tail.length <= width) {
+    return { project: clip(project, width), projectTail: '', status, statusTail: tail }
+  }
+  const projectTail = project.length + tail.length <= width ? tail : ''
+
+  return {
+    project: projectTail ? project : clip(project, width),
+    projectTail,
+    status: clip(status, width),
+    statusTail: '',
+  }
+}
+
 const shellQuote = (value: string): string =>
   /^[\w@%+=:,./-]+$/.test(value) ? value : `'${value.replace(/'/g, `'\\''`)}'`
 

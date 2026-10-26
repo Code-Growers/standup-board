@@ -4,7 +4,7 @@ import type { On } from 'claude-code'
 
 import { PALETTE } from '../hooks/art'
 import { fixtureFiles } from './fixtures'
-import { SESSIONS, NOW, paneProps, world } from './harness'
+import { HOME, SESSIONS, NOW, paneProps, world } from './harness'
 import type { WorldOptions } from './harness'
 
 const SURFACES = ['desktop', 'terminal'] as const
@@ -53,8 +53,15 @@ describe('board pane', () => {
       const running = await ui.find({ type: 'Box', key: 'col:running' })
       expect(running?.props.width).toBe(Math.floor((WIDE - 3) / 4))
       expect((await ui.find({ key: 'open:a2' }))?.text).toContain('Add rate limit')
-      expect((await ui.find({ key: 'open-project:a2' }))?.text).toBe('api')
-      expect((await ui.find({ key: 'open-status:a2' }))?.text).toBe('needs permission · 4m ago')
+      // Beside a picture there's no room for the time after the status, so it
+      // moves up beside the project; the terminal's glyph leaves room for both.
+      const lines = [
+        (await ui.find({ key: 'open-project:a2' }))?.text,
+        (await ui.find({ key: 'open-status:a2' }))?.text,
+      ]
+      expect(lines).toEqual(
+        surface === 'desktop' ? ['api · 4m', 'needs permission'] : ['api', 'needs permission · 4m'],
+      )
       expect((await ui.find({ key: 'open-status:w4' }))?.text).toContain('gone quiet')
       expect((await ui.find({ key: 'copy:a2' }))?.props.label).toBe('⧉ Copy')
       if (surface === 'terminal') {
@@ -191,6 +198,35 @@ describe('board pane', () => {
     await ui.unmount()
   })
 
+  test('opening a session hands the board to it, which opens its own', async ($, on) => {
+    const w = await openBoard($, on)
+    const ui = await mount($, 'desktop', WIDE)
+    await ui.press({ key: 'open:a2' })
+    expect(JSON.parse(w.files.get(`${HOME}/.claude/standup/handoff.json`) ?? '{}')).toEqual({
+      hostSessionId: 'local_a2-desk',
+      at: NOW,
+    })
+    await ui.unmount()
+  })
+
+  test('a session opens the board when a handoff names it, and ignores others', async ($, on) => {
+    const handoff = (hostSessionId: string, at: number) => ({
+      [`${HOME}/.claude/standup/handoff.json`]: JSON.stringify({ hostSessionId, at }),
+    })
+    const w = world(on, { hostSessionId: 'local_a2-desk', files: handoff('local_someone-else', NOW) })
+    await $.session.start({ cwd: '/Users/tester/code/api', surface: 'desktop', isInteractive: true })
+    await w.clock.advance(1_500)
+    expect(w.opened).toEqual([])
+
+    w.write(`${HOME}/.claude/standup/handoff.json`, JSON.stringify({ hostSessionId: 'local_a2-desk', at: NOW - 60_000 }))
+    await w.clock.advance(1_500)
+    expect(w.opened).toEqual([])
+
+    w.write(`${HOME}/.claude/standup/handoff.json`, JSON.stringify({ hostSessionId: 'local_a2-desk', at: w.clock.now() }))
+    await w.clock.advance(1_500)
+    expect(w.opened).toEqual(['standup'])
+  })
+
   test('desktop: an engine before 2.1.299 gets plain labels', async ($, on) => {
     await openBoard($, on, { version: '2.1.288' })
     const ui = await mount($, 'desktop', WIDE)
@@ -201,10 +237,13 @@ describe('board pane', () => {
     await ui.unmount()
   })
 
-  test('desktop: the review action sits on its own row with space above it', async ($, on) => {
+  test('desktop: the bar has a row of space on each side; a card without one keeps a row above its actions', async ($, on) => {
     await openBoard($, on)
     const ui = await mount($, 'desktop', WIDE)
-    expect((await ui.find({ type: 'Box', key: 'actions:a1' }))?.props.marginTop).toBe(1)
+    expect((await ui.find({ type: 'Box', key: 'bar:a1' }))?.props.marginY).toBe(1)
+    expect((await ui.find({ type: 'Box', key: 'actions:a1' }))?.props.marginTop).toBe(0)
+    expect(await ui.find({ type: 'Box', key: 'bar:w3' })).toBe(undefined)
+    expect((await ui.find({ type: 'Box', key: 'actions:w3' }))?.props.marginTop).toBe(1)
     await ui.unmount()
   })
 

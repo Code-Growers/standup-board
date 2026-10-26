@@ -6,6 +6,7 @@ import {
   buildBoard,
   clip,
   columnOf,
+  fitMeta,
   labelEnvironments,
   parseRecord,
   resumeCommand,
@@ -119,5 +120,31 @@ describe('art', () => {
     )
     expect(svg).toContain('cx="30"')
     expect(svg).toContain('width="132"')
+  })
+})
+
+describe('card lines', () => {
+  test('the time follows the status when both fit', () => {
+    expect(fitMeta('api', 'running', '1m ago', 20)).toEqual({
+      project: 'api',
+      projectTail: '',
+      status: 'running',
+      statusTail: ' · 1m',
+    })
+  })
+
+  test('the time moves beside the project when the status fills its line', () => {
+    expect(fitMeta('api', 'needs your reply', '30m ago', 18)).toEqual({
+      project: 'api',
+      projectTail: ' · 30m',
+      status: 'needs your reply',
+      statusTail: '',
+    })
+  })
+
+  test('nothing runs past the width: a long status is cut and the time left out', () => {
+    const meta = fitMeta('gef-ai-factory-backend', 'asked you a question', 'just now', 12)
+    expect(meta.project + meta.projectTail).toBe('gef-ai-fact…')
+    expect(meta.status + meta.statusTail).toBe('asked you a…')
   })
 })
